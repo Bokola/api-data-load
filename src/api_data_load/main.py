@@ -19,7 +19,7 @@ from .config import Config, ConfigError
 from .extract import upsert_to_excel
 from .landing import stage_raw
 from .logger import get_logger
-from .multi_collab_extract import run_multi_collab_extraction
+from .multi_collab_extract import run_download_extraction, run_multi_collab_extraction
 from .reconciliation import reconcile, write_reconciliation_report
 from .schema_validation import MULTI_COLLAB_SCHEMA, validate_extract
 from .scraper import ScraperError, open_browser
@@ -38,6 +38,19 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
     workbook. Raises PipelineError on a schema validation failure (config's
     validation.fail_on_error) - the raw landing capture is preserved either
     way, so nothing is lost even on a hard stop.
+
+    extraction.method in config.yaml picks how each country's data is
+    pulled off the pivot table page:
+      "download" (default) - export_results_tsv()'s confirmed real flow:
+        click the download icon, click Export, read the resulting .tsv.
+        Verified to mechanically work; the real column names in an actual
+        download have not yet been confirmed, so a validation failure
+        reporting "missing columns" on a real run is expected and useful -
+        it tells you the actual columns to reconcile against
+        metric_to_column / MULTI_COLLAB_SCHEMA, not a sign this is broken.
+      "scrape" - the older DOM-scraping path (extract_metric_grid /
+        reshape_to_wide) against the pivot table's live HTML. Kept for
+        reference/fallback; never confirmed against the real portal.
     """
     countries = cfg.get("search_scope.countries", [])
     products = cfg.get("search_scope.l5_products", [])
@@ -45,6 +58,8 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
         raise PipelineError("config.yaml's search_scope.countries is empty - nothing to search")
     if not products:
         raise PipelineError("config.yaml's search_scope.l5_products is empty - nothing to search")
+
+    extraction_method = cfg.get("extraction.method", "download")
 
     per_country_frames: list[pd.DataFrame] = []
     with open_browser(cfg) as s:
@@ -60,7 +75,16 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
                 log.error("Search failed for %s: %s - skipping this country", country, e)
                 continue
 
-            country_df = run_multi_collab_extraction(s, max_pages=max_pages)
+            if extraction_method == "scrape":
+                country_df = run_multi_collab_extraction(s, max_pages=max_pages)
+            else:
+                download_dir = cfg.get("output.download_dir", "./run_data/downloads")
+                country_df = run_download_extraction(
+                    s,
+                    download_dir=download_dir,
+                    max_pages=max_pages,
+                    select_all=cfg.get("extraction.select_all", False),
+                )
             if country_df.empty:
                 log.warning("No rows extracted for %s", country)
             else:

@@ -209,19 +209,30 @@ def run_multi_collab_extraction(
     all_records: list[dict] = []
     page_num = 1
     while True:
-        contexts = scraper.select_approved_rows()
-        if contexts:
-            if scraper.open_view():
-                all_records.extend(extract_metric_grid(scraper, contexts))
-                scraper.back_to_results()
+        try:
+            contexts = scraper.select_approved_rows()
+            if contexts:
+                if scraper.open_view():
+                    all_records.extend(extract_metric_grid(scraper, contexts))
+                    scraper.back_to_results()
+                else:
+                    log.warning(
+                        "Page %d: %d approved row(s) ticked but View failed to "
+                        "open - skipping this page's extraction",
+                        page_num, len(contexts),
+                    )
             else:
-                log.warning(
-                    "Page %d: %d approved row(s) ticked but View failed to "
-                    "open - skipping this page's extraction",
-                    page_num, len(contexts),
-                )
-        else:
-            log.info("Page %d: no approved rows to extract", page_num)
+                log.info("Page %d: no approved rows to extract", page_num)
+        except Exception:
+            # Nothing in this per-page block used to dump diagnostics on
+            # failure - only run_search() did. Once search itself started
+            # succeeding, an uncaught exception here (this whole post-search
+            # flow - Collaboration Selector grid, View, pivot table - was
+            # unverified against the real portal until now) propagated all
+            # the way up with zero forensic capture. Dump here too, then
+            # re-raise unchanged so callers' error handling is unaffected.
+            scraper.dump_diagnostics(f"multi_collab_extraction_failed_page{page_num}")
+            raise
 
         if page_num >= total:
             break
@@ -234,3 +245,96 @@ def run_multi_collab_extraction(
         page_num += 1
 
     return reshape_to_wide(all_records, cfg)
+
+
+def run_download_extraction(
+    scraper: GFPVANScraper,
+    download_dir: str,
+    max_pages: int | None = None,
+    select_all: bool = False,
+) -> pd.DataFrame:
+    """Full per-page loop using the confirmed real export flow instead of
+    DOM-scraping the pivot table: select rows -> open View -> click the
+    download icon -> Export -> read the downloaded .tsv -> back to
+    results -> repeat.
+
+    select_all=False (default): use select_approved_rows() - only rows
+    whose Review Status matches config's approved_statuses get ticked and
+    exported, same filtering as the DOM-scrape path. select_all=True:
+    use select_all_rows() instead - every row on the page gets ticked, no
+    status filtering.
+
+    Returns the concatenated raw DataFrame straight from pandas' read of
+    each page's .tsv, columns exactly as the portal names them - NOT
+    reshaped or renamed. This is deliberate: the real column names in an
+    actual downloaded export have never been confirmed (see SKILL.md), so
+    forcing a specific shape here would just be another guess. The columns
+    actually present get logged prominently on the first page read - check
+    that log line against config.yaml's metric_to_column /
+    MULTI_COLLAB_SCHEMA and adjust either the schema or add a mapping step
+    here once you've seen a real file, rather than assuming this matches.
+    """
+    assert scraper.page is not None
+
+    total = scraper.total_pages()
+    if max_pages is not None:
+        total = min(total, max_pages)
+
+    all_frames: list[pd.DataFrame] = []
+    page_num = 1
+    logged_columns = False
+    while True:
+        try:
+            contexts = (
+                None if select_all else scraper.select_approved_rows()
+            )
+            ticked = (
+                scraper.select_all_rows() if select_all else len(contexts or [])
+            )
+            if ticked:
+                if scraper.open_view():
+                    tsv_path = scraper.export_results_tsv(download_dir)
+                    page_df = pd.read_csv(tsv_path, sep="\t")
+                    if not logged_columns:
+                        log.info(
+                            "Downloaded export columns (verify against "
+                            "config.yaml's metric_to_column / "
+                            "MULTI_COLLAB_SCHEMA): %s",
+                            list(page_df.columns),
+                        )
+                        logged_columns = True
+                    log.info(
+                        "Page %d: downloaded %d row(s) from %s",
+                        page_num, len(page_df), tsv_path,
+                    )
+                    all_frames.append(page_df)
+                    scraper.back_to_results()
+                else:
+                    log.warning(
+                        "Page %d: %d row(s) ticked but View failed to open - "
+                        "skipping this page's export",
+                        page_num, ticked,
+                    )
+            else:
+                log.info("Page %d: no rows to export", page_num)
+        except Exception:
+            # Same reasoning as run_multi_collab_extraction: this whole
+            # post-search flow was unverified against the real portal until
+            # recently, so capture evidence before letting a failure
+            # propagate rather than losing it.
+            scraper.dump_diagnostics(f"download_extraction_failed_page{page_num}")
+            raise
+
+        if page_num >= total:
+            break
+        if not scraper.goto_next_page():
+            log.warning(
+                "Expected %d pages but pagination stopped after page %d",
+                total, page_num,
+            )
+            break
+        page_num += 1
+
+    if not all_frames:
+        return pd.DataFrame()
+    return pd.concat(all_frames, ignore_index=True)

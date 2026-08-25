@@ -1,0 +1,731 @@
+<div class="container" id="container">
+<div>
+    </div>
+    <div class="eto-slider__display pad-top-xs-2 pad-bottom-xs-2">
+      <div class="flex-xs-middle">
+<h1>Collaboration Selector<small>Page 1 of 1 ; 2 Records</small></h1>
+</div>
+      <div class="display-xs-flex">
+<div class="display-xs-inline-block">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<span id="configurator" title="Open Table Editor" role="menu" class="eto-dropdown eto-dropdown--link" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+  
+  <button type="button" class="eto-dropdown__toggle eto-btn eto-btn--link eto-btn--icon-only large-icon"><i class="md-icon">settings</i></button>
+  
+  <ul class="eto-dropdown__menu">
+    
+      
+	        
+	       	  <li class="eto-dropdown__menu-item">
+	          
+<label tabindex="0" id="uuid_0f56c63b-fa83-48b2-be09-46ef1fa9d368" class="eto-switch     ">
+  <input tabindex="-1" class="eto-switch__field" type="checkbox" checked="">
+  <span class="eto-switch__box notranslate md-icon outlined md-icon--sm"></span>
+  <span class="eto-switch__label--on">Condensed</span>
+  <span class="eto-switch__label--off">Condensed</span>
+</label>
+	        
+	      </li>
+	  
+    
+      
+          <li role="separator" class="eto-dropdown__menu__divider"></li>
+      
+    
+      
+	        
+	          <li onclick="javascript:config()" role="menuitem">
+            
+            
+	          <a href="javascript:void(0)"><span class="md-icon">settings</span>Open Table Editor</a>
+	        
+	      </li>
+	  
+    
+      
+	        
+	          <li onclick="javascript:resetTable()" role="menuitem">
+            
+            
+	          <a href="javascript:void(0)"><span class="md-icon">undo</span>Reset</a>
+	        
+	      </li>
+	  
+    
+  </ul>
+</span>
+
+
+<script>
+if(typeof(grid) == "undefined") {
+  var grid = null;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  if(!grid && document.getElementById('collabList')) {
+     grid = new eto.Grid({
+      el: document.getElementById('collabList')
+    });
+  }
+});
+
+
+jQuery(function() {
+    jQuery('#configurator .eto-dropdown__toggle').addClass('eto-btn eto-btn--link eto-btn--icon-only');
+    jQuery('#configurator button').addClass('large-icon');
+});
+
+function onClickCondensed (e) {
+  if(grid) {
+    if (e.target.checked) {
+      grid.el.classList.add('eto-grid--compact');
+      persistCompactGrid({'CompactGridSetting' : 'true'} );
+    } else {
+      grid.el.classList.remove('eto-grid--compact');
+      persistCompactGrid({'CompactGridSetting' : 'false'} );
+    }
+   
+    grid.alignRows();      
+  }
+}
+
+
+function persistCompactGrid(compactGridSelect) {
+  var configId = decodeString("ppffCLS|CIM_CollabList_Cust");
+  var urlStr = "gridConfig.do?Configurator="+ configId +"&wf=procFcstVMISearch";
+  
+  jQuery.ajax({
+    type: "POST",
+    url: urlStr,
+    data: compactGridSelect,
+    dataType: "text",
+    success: function( htmlData ) {
+      //Silent success
+    },
+    error: function ( ) {
+      console.error("Unable to save CompactGrid selection");
+    }
+  });
+}
+
+function config() {
+  if(isDirty) {
+    confirmActionModal('tableEditor-confirm-modal', 'Warning', 'WARNING!!! YOU HAVE NOT UPDATED (SAVED) YOUR CHANGES. Click CANCEL to return to current view; Click OK to proceed WITHOUT saving.', configureContinue);
+  }else {
+    configureContinue();
+  }
+}
+
+function configureContinue() {
+  jQuery('#loading').show();
+  var configId = "ppffCLS|CIM_CollabList_Cust";
+  var param = {};
+  
+  var url = "tableConfig/EDLTableConfig.jsp";
+  
+  param['Configurator'] = configId;
+  param['DetailPage'] = "false";
+  param['wf'] = "procFcstVMISearch";
+
+
+      param['PageSection'] = "CollabList";
+
+      param['PSDSelector'] = "CimPsd";
+
+      param['ActiveForm'] = "collabSelector";
+
+      var parameters = "VIEW_TYPE=ppff".split('&');
+      for (var i in parameters){
+          var tmpParams = parameters[i].split('=');
+          param[tmpParams[0]] = tmpParams[1];
+      }
+      
+
+  
+  jQuery.post(url, param).then(function(html) {
+    openTopModal({
+      id: 'tableConfiguator',
+      contentClassName: 'col-sm-12 col-md-8',
+      body: html,
+      header: 'Table Editor',
+      footer: '',
+      onFocusOutStay: true,
+      init: function(win, modal, frame) {
+        if(win.edlTableConfig && win.edlTableConfig.init)
+          win.edlTableConfig.init(modal, frame);
+        modal.on('closed', function(){win.edlTableConfig = null;});
+      }
+    });
+   
+    jQuery('#loading').hide();
+
+    function placeContentInFrame(frame, html) {
+      var iframeDoc = frame.contentDocument;
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+    }
+ });
+
+  return;
+}
+
+var gridForm =document.collabSelector;
+function resetTable() {
+   confirmActionModal('tableEidtor-confirm-modal', 'Warning', 'This action will reset your preferences to factory defaults. Are you sure you want to proceed?', resetTableContinue);
+}
+
+function resetTableContinue () {
+  gridForm.reset();
+
+  var uri = gridForm.action;
+  if (uri.indexOf("?") > 0) uri += "&";
+  else uri += "?";
+  uri += "Configurator.Reset=true&CombinedPage=null&DetailPage=false";
+  gridForm.action = uri;
+  if(gridForm.DisplayCols) {
+    gridForm.DisplayCols.value = '';
+  }
+  if (false ){
+    parent.reconfigure();
+  } else {
+    reconfigure();
+  }  
+}
+
+function onToggleDisableCountLimit(e) {
+  if(toggleDisableCountLimit) {
+    toggleDisableCountLimit(true);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+<span id="fileDownloadMenu" title="Download" role="menu" class="eto-dropdown eto-dropdown--link" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+  
+  <button type="button" class="eto-dropdown__toggle eto-btn eto-btn--link eto-btn--icon-only large-icon"><i class="md-icon">get_app</i></button>
+  
+  <ul class="eto-dropdown__menu">
+    
+      
+	        
+	          <li id="export" role="menuitem">
+            
+            
+              
+                
+              
+            
+	          <a onclick="javascript: doExport();"><span class="md-icon">get_app</span>Export</a>
+	        
+	      </li>
+	  
+    
+      
+	        
+	          <li name="Download" role="menuitem">
+            
+            
+              
+                
+              
+            
+	          <a onclick="javascript: void preparePrint('Download', '', new Array('PurchasedItemsInventoryUIPITConfigSsDownload', 'ProcItemsInventoryUIConfigCollabAttributeDownload'), new Array('DocumentType=PurchasedItemsInventoryUIPITConfigSsDownload&amp;QueueName=UIPITConfigDownloadQueue&amp;QUEUEING_THRESHOLD=100', 'DocumentType=ProcItemsInventoryUIConfigCollabAttributeDownload&amp;QueueName=UICollabAttribConfigDownloadQueue&amp;QUEUEING_THRESHOLD=250'), null, null, null,false,null)"><span class="md-icon">exit_to_app</span>File Download</a>
+	        
+	      </li>
+	  
+    
+  </ul>
+</span>
+
+
+<script>
+jQuery(function() {
+    jQuery('.eto-dropdown--link .eto-dropdown__toggle').addClass('eto-btn').addClass('eto-btn--link').addClass('eto-btn--icon-only').addClass('large-icon');
+});
+</script>
+</div>
+     </div>
+   </div>
+   <div class="row">
+<script>rowActionLinks["Supply Planning Search Attribute Detail"] = "goto|procFcstVMISearch_AttrDetail";</script>
+<script>rowActionLinks["Collab Attribute Audit"] = "goto|CollabAttrAudit";</script>
+<script>rowActionLinks["Supply Planning Search Attribute Detail"] = "goto|procFcstVMISearch_AttrDetail";</script>
+<script>rowActionLinks["Collab Attribute Audit"] = "goto|CollabAttrAudit";</script>
+<div class="col-xs-12">
+       
+<div class="eto-grid eto-grid--compact" id="collabList">
+  
+    <div class="eto-grid-frozen">
+      
+      
+      <table style="width: 1176px; table-layout: fixed;">
+        <colgroup><col style="width: 29px;"><col style="width: 61px;"><col style="width: 166px;"><col style="width: 277px;"><col style="width: 182px;"><col style="width: 461px;"></colgroup>
+        <thead><tr style="height: 32.5px;"><th colspan="1" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);"></th><th class="eto-grid-column--shrink" colspan="1" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+                    
+<div id="collabList" class="eto-checkbox eto-checkbox-menu eto-all-rows-indicator">
+  <label>
+    <input class="eto-checkbox__field" type="checkbox">
+    <span class="eto-checkbox__box"></span>
+  </label>
+<span id="collabList" role="menu" class="eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+  <button type="button" class="eto-dropdown__toggle"><i translate="no" class="notranslate md-icon">keyboard_arrow_down</i></button>
+  <ul class="eto-dropdown__menu">
+    
+      <li tabindex="-1" name="all-page" data-checkbox-state="double" role="menuitem">
+        
+        
+          
+            
+          
+        
+        <a onclick="javascript: setAction('spanPages')">All on all pages</a>
+      </li>
+    
+      <li tabindex="-1" name="none" data-checkbox-state="none" role="menuitem">
+        
+        
+          
+            
+          
+        
+        <a onclick="javascript: setAction('unselectAll')">None</a>
+      </li>
+    
+  </ul>
+</span></div>
+                    
+                  </th>
+<th data-column="Collab.CustomerDescription" title="Country Name" role="columnheader" class="eto-grid-column eto-grid-column--sortable eto-grid-column--multi-sortable eto-grid-column--asc" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_88fcc96d-b14b-48a3-ac79-54d1a495b108" aria-describedby="#uuid_88fcc96d-b14b-48a3-ac79-54d1a495b108">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="Collab.CustomerDescription" title="Country Name" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_88fcc96d-b14b-48a3-ac79-54d1a495b108">
+  <div class="eto-tooltip__content">Country Name</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><a class="eto-grid-column__label " href="javascript:void(0)">Country Name<span class="eto-grid-column__sort-index">1</span></a><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="unfreeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Unfreeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="Collab.CustSiteDescription" title="Supply Plan Bucket Description" role="columnheader" class="eto-grid-column eto-grid-column--sortable eto-grid-column--multi-sortable eto-grid-column--desc" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_327fcf2f-8990-4df2-8bc4-f04c941d90cf" aria-describedby="#uuid_327fcf2f-8990-4df2-8bc4-f04c941d90cf">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="Collab.CustSiteDescription" title="Supply Plan Bucket Description" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_327fcf2f-8990-4df2-8bc4-f04c941d90cf">
+  <div class="eto-tooltip__content">Supply Plan Bucket Description</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><a class="eto-grid-column__label " href="javascript:void(0)">Supply Plan Bucket Description<span class="eto-grid-column__sort-index">2</span></a><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="unfreeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Unfreeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="DIM_ATTR.CustItemHierarchyLevel3" title="L3 - Method" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_751d29da-5e53-4f23-b68a-b8f61cd41f05" aria-describedby="#uuid_751d29da-5e53-4f23-b68a-b8f61cd41f05">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="DIM_ATTR.CustItemHierarchyLevel3" title="L3 - Method" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_751d29da-5e53-4f23-b68a-b8f61cd41f05">
+  <div class="eto-tooltip__content">L3 - Method</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">L3 - Method</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="unfreeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Unfreeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="Collab.CustItemDescription" title="L5 - Product" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_155a1df7-8d93-40f1-aab6-c79d852af8a7" aria-describedby="#uuid_155a1df7-8d93-40f1-aab6-c79d852af8a7">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="Collab.CustItemDescription" title="L5 - Product" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_155a1df7-8d93-40f1-aab6-c79d852af8a7">
+  <div class="eto-tooltip__content">L5 - Product</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">L5 - Product</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="unfreeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Unfreeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th></tr></thead>
+        <tbody><tr style="height: 32px;"><td class="eto-grid-row-actions"><div class="eto-grid-row-actions__container"><span class="eto-grid-row-actions__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="Supply Planning Search Attribute Detail">Supply Planning Search Attribute Detail</a></li><li><a href="javascript:void(0)" data-action="Collab Attribute Audit">Collab Attribute Audit</a></li></ul>
+  </span></div></td><td class="">
+  
+    <label class="eto-checkbox">
+      <input class="eto-checkbox__field eto-row-indicator" type="checkbox" name="chk-collab-id" value="1383">
+      <span class="eto-checkbox__box"></span>
+    </label>
+  
+</td><td class="">Kenya</td><td class="">No Supply Plan Available</td><td class="">Injectable Contraceptives</td><td class="">Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular</td></tr><tr style="height: 30px;"><td class="eto-grid-row-actions"><div class="eto-grid-row-actions__container"><span class="eto-grid-row-actions__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="Supply Planning Search Attribute Detail">Supply Planning Search Attribute Detail</a></li><li><a href="javascript:void(0)" data-action="Collab Attribute Audit">Collab Attribute Audit</a></li></ul>
+  </span></div></td><td class="">
+  
+    <label class="eto-checkbox">
+      <input class="eto-checkbox__field eto-row-indicator" type="checkbox" name="chk-collab-id" value="1364">
+      <span class="eto-checkbox__box"></span>
+    </label>
+  
+</td><td class="">Kenya</td><td class="">MOH Supply Plan</td><td class="">Injectable Contraceptives</td><td class="">Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular</td></tr></tbody>
+      </table>
+    </div>
+  
+
+  
+    <div class="eto-grid-scroll" style="margin-bottom: -18px;">
+      
+      
+      <table style="width: 3466px; table-layout: fixed;">
+        <colgroup><col style="width: 215px;"><col style="width: 229px;"><col style="width: 247px;"><col style="width: 159px;"><col style="width: 228px;"><col style="width: 241px;"><col style="width: 229px;"><col style="width: 243px;"><col style="width: 102px;"><col style="width: 106px;"><col style="width: 110px;"><col style="width: 132px;"><col style="width: 228px;"><col style="width: 167px;"><col style="width: 213px;"><col style="width: 150px;"><col style="width: 182px;"><col style="width: 285px;"></colgroup>
+        <thead><tr style="height: 32.5px;">
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString6" title="Review Status - Inventory" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_7face1a9-9b58-47fa-a90e-7ef0830fa3fd" aria-describedby="#uuid_7face1a9-9b58-47fa-a90e-7ef0830fa3fd">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString6" title="Review Status - Inventory" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_7face1a9-9b58-47fa-a90e-7ef0830fa3fd">
+  <div class="eto-tooltip__content">Review Status - Inventory</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Review Status - Inventory</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString40" title="Review Status - Supply Plan" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_c9010f65-953a-4ff8-8674-6b9e0a085f8c" aria-describedby="#uuid_c9010f65-953a-4ff8-8674-6b9e0a085f8c">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString40" title="Review Status - Supply Plan" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_c9010f65-953a-4ff8-8674-6b9e0a085f8c">
+  <div class="eto-tooltip__content">Review Status - Supply Plan</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Review Status - Supply Plan</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString46" title="Assigned Analyst Email" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_865f4ba1-0233-46cf-9996-2c44417ddcfe" aria-describedby="#uuid_865f4ba1-0233-46cf-9996-2c44417ddcfe">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString46" title="Assigned Analyst Email" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_865f4ba1-0233-46cf-9996-2c44417ddcfe">
+  <div class="eto-tooltip__content">Assigned Analyst Email</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Assigned Analyst Email</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString47" title="Assigned Analyst" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_ee845554-36c2-4fc1-abef-b26fe07a63c9" aria-describedby="#uuid_ee845554-36c2-4fc1-abef-b26fe07a63c9">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString47" title="Assigned Analyst" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_ee845554-36c2-4fc1-abef-b26fe07a63c9">
+  <div class="eto-tooltip__content">Assigned Analyst</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Assigned Analyst</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString48" title="Inventory Upload Schedule" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_f2bb2174-fad3-4b7e-85ac-ae0f7d7327b4" aria-describedby="#uuid_f2bb2174-fad3-4b7e-85ac-ae0f7d7327b4">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString48" title="Inventory Upload Schedule" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_f2bb2174-fad3-4b7e-85ac-ae0f7d7327b4">
+  <div class="eto-tooltip__content">Inventory Upload Schedule</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Inventory Upload Schedule</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribString49" title="Supply Plan Upload Schedule" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_e75506d8-100e-4f21-a2ab-53bd13ebc682" aria-describedby="#uuid_e75506d8-100e-4f21-a2ab-53bd13ebc682">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribString49" title="Supply Plan Upload Schedule" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_e75506d8-100e-4f21-a2ab-53bd13ebc682">
+  <div class="eto-tooltip__content">Supply Plan Upload Schedule</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Supply Plan Upload Schedule</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribInteger01" title="Inventory Upload Due Date" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_bca27156-8771-413d-a6b7-d817ae81075e" aria-describedby="#uuid_bca27156-8771-413d-a6b7-d817ae81075e">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribInteger01" title="Inventory Upload Due Date" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_bca27156-8771-413d-a6b7-d817ae81075e">
+  <div class="eto-tooltip__content">Inventory Upload Due Date</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Inventory Upload Due Date</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.ProjDefCollabAttribInteger02" title="Supply Plan Upload Due Date" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_27190b89-e989-4711-b99f-e5c1bb8eb98a" aria-describedby="#uuid_27190b89-e989-4711-b99f-e5c1bb8eb98a">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.ProjDefCollabAttribInteger02" title="Supply Plan Upload Due Date" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_27190b89-e989-4711-b99f-e5c1bb8eb98a">
+  <div class="eto-tooltip__content">Supply Plan Upload Due Date</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Supply Plan Upload Due Date</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.BlanketOrderExpiryTolDays" title="Alert On" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_30312074-afe5-49dc-9ca8-45c1a8c1fa00" aria-describedby="#uuid_30312074-afe5-49dc-9ca8-45c1a8c1fa00">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.BlanketOrderExpiryTolDays" title="Alert On" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_30312074-afe5-49dc-9ca8-45c1a8c1fa00">
+  <div class="eto-tooltip__content">Alert On</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Alert On</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.MinDos" title="Min MOS" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_b97a7e5c-dde7-4b22-9699-442f3c97be49" aria-describedby="#uuid_b97a7e5c-dde7-4b22-9699-442f3c97be49">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.MinDos" title="Min MOS" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_b97a7e5c-dde7-4b22-9699-442f3c97be49">
+  <div class="eto-tooltip__content">Min MOS</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Min MOS</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.MaxDos" title="Max MOS" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_1b107ce8-bf02-4a4e-818b-bfbb70b12a1c" aria-describedby="#uuid_1b107ce8-bf02-4a4e-818b-bfbb70b12a1c">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.MaxDos" title="Max MOS" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_1b107ce8-bf02-4a4e-818b-bfbb70b12a1c">
+  <div class="eto-tooltip__content">Max MOS</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Max MOS</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.TargetDos" title="Desired MOS" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_01e1f2d8-1daa-40ca-a171-6c7bfb4ba073" aria-describedby="#uuid_01e1f2d8-1daa-40ca-a171-6c7bfb4ba073">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.TargetDos" title="Desired MOS" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_01e1f2d8-1daa-40ca-a171-6c7bfb4ba073">
+  <div class="eto-tooltip__content">Desired MOS</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Desired MOS</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.UnitPrice" title="Estimated Unit Value (USD)" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_1c776c75-cd2b-4aa7-a07b-efd25353b4d7" aria-describedby="#uuid_1c776c75-cd2b-4aa7-a07b-efd25353b4d7">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.UnitPrice" title="Estimated Unit Value (USD)" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_1c776c75-cd2b-4aa7-a07b-efd25353b4d7">
+  <div class="eto-tooltip__content">Estimated Unit Value (USD)</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">Estimated Unit Value (USD)</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="COLLAB_ATTR.PriceBasis" title="UOM Value Factor" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_b8a58e9a-f920-4c7c-9e60-feb3f7b3ac57" aria-describedby="#uuid_b8a58e9a-f920-4c7c-9e60-feb3f7b3ac57">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="COLLAB_ATTR.PriceBasis" title="UOM Value Factor" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_b8a58e9a-f920-4c7c-9e60-feb3f7b3ac57">
+  <div class="eto-tooltip__content">UOM Value Factor</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">UOM Value Factor</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="DIM_ATTR.ProjDefStringDACustItem02" title="GPC Attribute Form Desc" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_a05e73de-669f-4d5f-bfc5-54c64bf77ed5" aria-describedby="#uuid_a05e73de-669f-4d5f-bfc5-54c64bf77ed5">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="DIM_ATTR.ProjDefStringDACustItem02" title="GPC Attribute Form Desc" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_a05e73de-669f-4d5f-bfc5-54c64bf77ed5">
+  <div class="eto-tooltip__content">GPC Attribute Form Desc</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">GPC Attribute Form Desc</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="DIM_ATTR.CustItemHierarchyLevel1" title="L1" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_a3b54e24-2420-4eb5-b2fa-f9697b3056da" aria-describedby="#uuid_a3b54e24-2420-4eb5-b2fa-f9697b3056da">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="DIM_ATTR.CustItemHierarchyLevel1" title="L1" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_a3b54e24-2420-4eb5-b2fa-f9697b3056da">
+  <div class="eto-tooltip__content">L1</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">L1</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="DIM_ATTR.CustItemHierarchyLevel2" title="L2" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_6bc0cd86-6514-4d2a-90da-9bebf1f66b25" aria-describedby="#uuid_6bc0cd86-6514-4d2a-90da-9bebf1f66b25">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="DIM_ATTR.CustItemHierarchyLevel2" title="L2" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_6bc0cd86-6514-4d2a-90da-9bebf1f66b25">
+  <div class="eto-tooltip__content">L2</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">L2</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th>
+<th data-column="DIM_ATTR.CustItemHierarchyLevel4" title="L4" role="columnheader" class="eto-grid-column" colspan="1" scope="colgroup" style="position: relative; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);">
+  <div class="eto-grid-column__container"><a class="eto-grid-column__action display-xs-none" href="javascript:void(0)" data-action="expand" title="expand column" data-tooltip="#uuid_b8095b9e-2bf3-4dc7-8917-5bcece9fc8f7" aria-describedby="#uuid_b8095b9e-2bf3-4dc7-8917-5bcece9fc8f7">
+      <span class="md-icon" aria-hidden="true">more_horiz</span>
+<div data-column="DIM_ATTR.CustItemHierarchyLevel4" title="L4" class="eto-tooltip" data-anchor-x="center" data-anchor-y="top" id="uuid_b8095b9e-2bf3-4dc7-8917-5bcece9fc8f7">
+  <div class="eto-tooltip__content">L4</div>
+  <span class="eto-tooltip__caret"></span>
+</div></a><span class="eto-grid-column__label ">L4</span><span class="eto-grid-column__action eto-dropdown" aria-expanded="false" data-anchor-x="left" data-anchor-y="bottom">
+    <a class="eto-dropdown__toggle" href="javascript:void(0)"><span class="md-icon" aria-hidden="true">more_vert</span></a>
+    <ul class="eto-dropdown__menu"><li><a href="javascript:void(0)" data-action="freeze"><span class="md-icon" aria-hidden="true">ac_unit</span>Freeze</a></li><li><a href="javascript:void(0)" data-action="collapse"><span class="md-icon" aria-hidden="true"><div class="md-icon rotate-90" style="margin-left: 4px;">vertical_align_bottom</div></span>Collapse</a></li><li><a href="javascript:void(0)" data-action="resize"><span class="md-icon" aria-hidden="true">straighten</span>Resize</a></li><li><a href="javascript:void(0)" data-action="remove"><span class="md-icon" aria-hidden="true">remove_circle_outline</span>Remove</a></li><li role="separator" class="eto-dropdown__menu__divider"></li><li><a href="javascript:void(0)" data-action="config"><span class="md-icon" aria-hidden="true">settings</span>Open Table Editor</a></li></ul>
+  </span><span class="eto-grid-column__resize-handle"></span></div>
+</th></tr></thead>
+        <tbody><tr style="height: 32px;"><td class="">&nbsp;<span class="read-only-dependent-enum-source" type="hidden" name="Attr::COLLAB_ATTR.ProjDefCollabAttribString6|1383" data-value=""></span></td><td class="">&nbsp;<span class="read-only-dependent-enum-source" type="hidden" name="Attr::COLLAB_ATTR.ProjDefCollabAttribString40|1383" data-value=""></span></td><td class="">&nbsp;</td><td class="">&nbsp;</td><td class="">&nbsp;</td><td class="">&nbsp;</td><td class="text-align-right">&nbsp;</td><td class="text-align-right">&nbsp;</td><td class="text-align-right">0</td><td class="text-align-right">6</td><td class="text-align-right">12</td><td class="text-align-right">12</td><td class="text-align-right">0.80</td><td class="text-align-right">1</td><td class="">.</td><td class="">Reproductive Health</td><td class="">Injectable Contraceptives</td><td class="">Medroxyprogesterone Acetate, Injectable</td></tr><tr style="height: 30px;"><td class="">Ready to Use Approved<span class="read-only-dependent-enum-source" type="hidden" name="Attr::COLLAB_ATTR.ProjDefCollabAttribString6|1364" data-value="Ready to Use Approved"></span></td><td class="">Ready to Use Approved<span class="read-only-dependent-enum-source" type="hidden" name="Attr::COLLAB_ATTR.ProjDefCollabAttribString40|1364" data-value="Ready to Use Approved"></span></td><td class="">dmumbia@clintonhealthaccess.org</td><td class="">dmumbia</td><td class="">1,2,3,4,5,6,7,8,9,10,11,12</td><td class="">3,6,9,12</td><td class="text-align-right">5</td><td class="text-align-right">15</td><td class="text-align-right">2</td><td class="text-align-right">18</td><td class="text-align-right">24</td><td class="text-align-right">24</td><td class="text-align-right">0.80</td><td class="text-align-right">1</td><td class="">.</td><td class="">Reproductive Health</td><td class="">Injectable Contraceptives</td><td class="">Medroxyprogesterone Acetate, Injectable</td></tr></tbody>
+      </table>
+    </div>
+  
+
+  
+</div></div>
+   </div>
+
+   <div class="sticky-footer-wrapper" style="clear: both; position: relative; width: 100%; background-color: white; z-index: 10; transition: opacity 0.2s; opacity: 1; transform: translateY(0px);"><div class="footer-scroller" style="height: 18px; overflow: auto hidden; width: 132.5px; position: relative; left: 1180.5px;"><div class="footer-scroller-inner" style="height: 1px; width: 3466.5px;">&nbsp;</div></div><div class="sticky-footer row margin-top-xs-2">
+<!-- TODO: reverse order of #Pages & Jump -->
+   <div class="col-xs-12 col-sm-8">
+     <div class="eto-btn-group">
+<input type="hidden" name="ViewExist">
+      <div id="goto-select" class="eto-select">
+  <label class="eto-select__label" for="eto34"></label>
+  
+    <div class="eto-select__field-container">
+      <select class="eto-select__field" aria-invalid="false" id="eto34" aria-describedby="eto35">
+        
+    
+      <optgroup label="Multi-Collab View">
+        
+    
+      <option value="detail|Collaboration View" selected="selected">Collaboration View</option>
+    
+  
+      </optgroup>
+    
+  
+      </select>
+    </div>
+    <span class="eto-select__message" role="alert" aria-live="polite" id="eto35"></span>
+  
+</div>&nbsp;
+      
+<button type="button" onclick="" id="goto-tab" class="eto-btn eto-btn--primary" data-on-click="javascript:onClickView()">View</button><input type="hidden" name="MCV_VIEW_SELECTOR" value="Collaboration View">
+</div></div>
+   <div class="col-xs-12 col-sm-4 text-align-right">
+     <nav id="uuid_555b03e7-e219-4613-9372-a6e58207571d" class="eto-pagination flex-items-xs-right">
+
+  <div class="eto-pagination__links">
+
+    
+
+    
+      <a class="eto-pagination__back eto-btn eto-btn--icon-only disabled" disabled=""></a>
+    
+
+    
+      <span class="eto-pagination__text">&nbsp;</span>
+    
+
+    
+      <a class="eto-pagination__forward eto-btn eto-btn--icon-only disabled" disabled=""></a>
+    
+
+  </div>
+
+  
+  
+  
+    
+    
+    
+    
+    
+<div id="uuid_555b03e7-e219-4613-9372-a6e58207571d" class="eto-items-per-page flex-items-xs-right">
+  <label class="eto-select">
+    <span class="eto-select__label">Records Per Page</span>
+    <div class="eto-select__field-container">
+      <select class="eto-select__field" name="MaxCollabsPerPage">
+        
+          <option value="20">20</option>
+        
+          <option value="25" selected="selected">25</option>
+        
+          <option value="30">30</option>
+        
+      </select>
+    </div>
+  </label>
+</div>
+  
+
+</nav></div>
+<script>
+                // remove extraneous padding from cells with gauge
+                jQuery('.eto-grid td .eto-gauge').each(function(index, el) {
+                    jQuery(el).parents('td').addClass('text-align-center pad-top-xs-0 pad-bottom-xs-0')
+                });
+   </script>
+  </div></div><div class="sticky-footer-wrapper-tail" style="clear:both;display:block;"></div>
+</div>

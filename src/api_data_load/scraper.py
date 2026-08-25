@@ -1325,6 +1325,97 @@ class GFPVANScraper:
                 return i
         return None
 
+    def _check_eto_checkbox(self, scope: Locator, checkbox_selectors: list[str] | None = None) -> bool:
+        """Check a custom eto-checkbox component within `scope` (a row, a
+        header row, or any container with exactly one relevant checkbox).
+
+        Confirmed real markup on the post-search results grid: the same
+        eto-checkbox component used by the autocomplete widgets - a
+        <label class="eto-checkbox"> wrapping <input type="checkbox">
+        and a visible, styled <span class="eto-checkbox__box">. Layers the
+        same attempts that turned out to matter there: .check() on the raw
+        input first, then the visible .eto-checkbox__box span (the actual
+        styled indicator - the raw input may not be the effective click
+        target), then the wrapping label. Returns True once the input
+        actually reads as checked, not just because a click didn't raise.
+        """
+        assert self.page is not None
+        selectors = checkbox_selectors or ["input[type=checkbox]"]
+        checkbox = None
+        for sel in selectors:
+            candidate = scope.locator(sel).first
+            if candidate.count() > 0:
+                checkbox = candidate
+                break
+        if checkbox is None:
+            return False
+        if checkbox.is_checked():
+            return True
+
+        try:
+            checkbox.check(timeout=2000)
+            if checkbox.is_checked():
+                return True
+        except PWTimeout:
+            pass
+
+        box = scope.locator(".eto-checkbox__box").first
+        if box.count() > 0:
+            box.click()
+            if checkbox.is_checked():
+                return True
+
+        label = scope.locator("label.eto-checkbox, .eto-checkbox").first
+        if label.count() > 0:
+            label.click()
+            if checkbox.is_checked():
+                return True
+
+        return checkbox.is_checked()
+
+    def _get_grid_frame(self):
+        """Return whichever Page/Frame currently holds the results grid.
+
+        Confirmed real bug: select_approved_rows() and select_all_rows()
+        used self.page.locator(...) directly, which only searches the
+        main/outer page - the actual grid (e.g. selectCollab.do) always
+        loads inside an iframe (confirmed: first_match() with
+        poll_for_new_frames=True is what actually finds results.row after
+        search submission). A raw self.page.locator(...) call in the same
+        flow silently searches the wrong document and finds nothing, no
+        matter how correct the selector or search text is - this was the
+        real explanation for "Could not locate 'Review Status - Inventory'
+        column header" even though that exact header text does exist in a
+        real capture: it was never being looked for in the right place.
+
+        Resolved via the SAME frame cache first_match() already populates
+        for results.row, so this doesn't cost a second full scan once
+        anything has already been found once this session.
+
+        Verifies the cached frame is still alive before trusting it - a
+        page navigation (e.g. goto_next_page(), or re-navigating between
+        countries) can detach a previously-cached frame, and using it
+        without checking raises 'Frame was detached' instead of falling
+        back to a fresh scan. first_match() already guards its own cache
+        the same way; this mirrors that.
+        """
+        assert self.page is not None
+        row_selectors = self.cfg.selectors("results.row")
+        cache_key = tuple(row_selectors)
+        cached = self._frame_cache.get(cache_key)
+        if cached is not None:
+            try:
+                for sel in row_selectors:
+                    cached.locator(sel).count()
+                return cached
+            except Exception:  # noqa: BLE001 - detached/navigated away
+                self._frame_cache.pop(cache_key, None)
+        try:
+            self.first_match(row_selectors, timeout_ms=self.cfg.get("timeouts.short_ms", 5000))
+        except ScraperError:
+            pass
+        return self._frame_cache.get(cache_key, self.page)
+
     def select_approved_rows(self) -> list[dict]:
         """Tick checkboxes for rows whose Review Status - Inventory is approved.
 
@@ -1336,9 +1427,10 @@ class GFPVANScraper:
         to get there, instead.
         """
         assert self.page is not None
+        grid = self._get_grid_frame()
         approved = set(self.cfg.get("approved_statuses", ["Ready to Use Approved"]))
 
-        header_cells = self.page.locator("thead th, [role=columnheader]")
+        header_cells = grid.locator("thead th, [role=columnheader]")
         review_col_idx = self._find_column_index(
             header_cells, ["Review Status - Inventory"]
         )
@@ -1350,7 +1442,20 @@ class GFPVANScraper:
         )
 
         if review_col_idx is None:
-            log.warning("Could not locate 'Review Status - Inventory' column header")
+            actual_headers = [
+                header_cells.nth(i).inner_text().strip()
+                for i in range(header_cells.count())
+            ]
+            log.warning(
+                "Could not locate 'Review Status - Inventory' column header. "
+                "Actual header cells found: %s. This may mean the column "
+                "genuinely isn't in this grid (review status could be a "
+                "search-time filter field instead, not a results column - "
+                "see search_page.review_status_inventory_dropdown in "
+                "config.yaml) rather than a wording mismatch.",
+                actual_headers,
+            )
+            self.dump_diagnostics("review_status_column_not_found")
             return []
         if product_col_idx is None or country_col_idx is None:
             log.warning(
@@ -1361,7 +1466,7 @@ class GFPVANScraper:
 
         row_selector = None
         for sel in self.cfg.selectors("results.row"):
-            if self.page.locator(sel).count() > 0:
+            if grid.locator(sel).count() > 0:
                 row_selector = sel
                 break
         if row_selector is None:
@@ -1372,7 +1477,7 @@ class GFPVANScraper:
             "input[type=checkbox]"
         ]
 
-        rows = self.page.locator(row_selector)
+        rows = grid.locator(row_selector)
         contexts: list[dict] = []
         # Re-check the live count each iteration in case checking a box
         # causes the grid to re-render (e.g. virtualized grids).
@@ -1385,14 +1490,7 @@ class GFPVANScraper:
                 continue
             status_text = cells.nth(review_col_idx).inner_text().strip()
             if status_text in approved:
-                cb = None
-                for cb_sel in checkbox_selectors:
-                    candidate = row.locator(cb_sel).first
-                    if candidate.count() > 0:
-                        cb = candidate
-                        break
-                if cb is not None and not cb.is_checked():
-                    cb.check()
+                if self._check_eto_checkbox(row, checkbox_selectors):
                     contexts.append(
                         {
                             "row_index": r,
@@ -1414,42 +1512,127 @@ class GFPVANScraper:
         log.info("Ticked %d approved rows on current page", len(contexts))
         return contexts
 
+    def select_all_rows(self) -> int:
+        """Select every row on the current results page via the grid's
+        select-all checkbox, rather than ticking rows individually by
+        status.
+
+        Confirmed real UI: 'select all by clicking the first checkbox in
+        the same row as the headers.' Implemented as the FIRST checkbox
+        found, in DOM order, within the results table - not by first
+        locating a <thead> wrapper. An earlier version required <thead tr>
+        specifically and failed with 'Could not locate a header row' on
+        the real portal - this grid apparently doesn't use that literal
+        structure. The select-all control still reliably renders before
+        any data row's own checkbox regardless of what wraps it, so "first
+        checkbox in the table" is a more robust target than assuming any
+        particular table markup.
+
+        Returns the number of rows on the page (best-effort - the actual
+        per-row checked state isn't re-verified individually here, since
+        the select-all control is a single widget covering all of them).
+        """
+        assert self.page is not None
+        grid = self._get_grid_frame()
+
+        table_selector = None
+        for sel in self.cfg.selectors("results.table"):
+            if grid.locator(sel).count() > 0:
+                table_selector = sel
+                break
+        scope = grid.locator(table_selector) if table_selector else grid
+
+        checkbox_selectors = self.cfg.selectors("results.select_all_checkbox") or [
+            "input[type=checkbox]"
+        ]
+        if not self._check_eto_checkbox(scope, checkbox_selectors):
+            log.warning("Could not check the select-all checkbox")
+            self.dump_diagnostics("select_all_checkbox_not_found")
+            return 0
+
+        row_selector = None
+        for sel in self.cfg.selectors("results.row"):
+            if grid.locator(sel).count() > 0:
+                row_selector = sel
+                break
+        count = grid.locator(row_selector).count() if row_selector else 0
+        log.info("Selected all %d row(s) via header checkbox", count)
+        return count
+
     def open_view(self) -> bool:
-        """Click View; return True if Multi-Collab View opened."""
+        """Click View; return True if the pivot table / Multi-Collab view opened.
+
+        Confirmed real button (id is stable here, unlike the autocomplete
+        widgets' random UUIDs, but data-on-click is still the more precise
+        target): id="goto-tab", data-on-click="javascript:onClickView()".
+        config.yaml's results.view_button tries that first, falling back to
+        plain text/role matches.
+        """
         assert self.page is not None
         try:
             self.first_match(self.cfg.selectors("results.view_button")).click()
         except ScraperError as e:
             log.error("Could not click View: %s", e)
-            self.snapshot("view_click_failed")
+            self.dump_diagnostics("view_click_failed")
             return False
         except PWTimeout as e:
             log.error("View button click timed out: %s", e)
-            self.snapshot("view_click_failed")
+            self.dump_diagnostics("view_click_failed")
             return False
 
-        # Wait for either the Multi-Collab marker or a network idle
-        for sel in self.cfg.selectors("multi_collab.container"):
-            try:
-                self.page.locator(sel).first.wait_for(state="visible", timeout=8000)
-                return True
-            except PWTimeout:
-                continue
+        # Wait for either the Multi-Collab marker or a network idle.
+        # first_match() here (not raw self.page.locator) so this correctly
+        # searches whatever frame the pivot view actually renders in - see
+        # _get_grid_frame()'s docstring for why a raw self.page call would
+        # silently search the wrong document.
+        try:
+            self.first_match(self.cfg.selectors("multi_collab.container"), timeout_ms=8000)
+            return True
+        except ScraperError:
+            pass
         self.page.wait_for_load_state("networkidle")
         return True
+
+    def export_results_tsv(self, download_dir: Path | str) -> Path:
+        """From the pivot table view, click the download icon then
+        'Export' to get a direct .tsv download. Returns the path the file
+        was saved to.
+
+        Confirmed real UI: a download icon (<i class="md-icon">get_app</i>)
+        opens two options - 'Export' (direct .tsv download, used here) and
+        'File Download' (navigates to ioDocs.do, then a 'Next' click gets a
+        .xlsx). Export is implemented here since it's a single click with
+        no extra page navigation; File Download -> ioDocs.do is documented
+        in SKILL.md but not yet implemented - ask if you need that path
+        instead (e.g. if downstream parsing specifically needs .xlsx).
+        """
+        assert self.page is not None
+        download_dir = Path(download_dir)
+        download_dir.mkdir(parents=True, exist_ok=True)
+
+        self.first_match(self.cfg.selectors("results.download_icon")).click()
+        export_option = self.first_match(self.cfg.selectors("results.export_option"))
+
+        with self.page.expect_download() as download_info:
+            export_option.click()
+        download = download_info.value
+
+        dest = download_dir / download.suggested_filename
+        download.save_as(str(dest))
+        log.info("Downloaded results export to %s", dest)
+        return dest
 
     def back_to_results(self) -> None:
         """Return to the Collaboration Selector results page."""
         assert self.page is not None
-        for sel in self.cfg.selectors("multi_collab.back_button"):
-            loc = self.page.locator(sel).first
-            if loc.count() > 0:
-                try:
-                    loc.click()
-                    self.page.wait_for_load_state("networkidle")
-                    return
-                except Exception:  # noqa: BLE001
-                    continue
+        try:
+            self.first_match(
+                self.cfg.selectors("multi_collab.back_button"), timeout_ms=5000
+            ).click()
+            self.page.wait_for_load_state("networkidle")
+            return
+        except ScraperError:
+            pass
         # Fallback: browser back
         log.info("No back link found - using browser history")
         self.page.go_back()

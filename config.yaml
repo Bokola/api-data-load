@@ -64,7 +64,6 @@ search_scope:
     - "Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular"
     - "Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule, Intramuscular"
     - "Norethisterone Enantate 200 mg/mL (1mL) Ampoule, Intramuscular"
-    - "Norethisterone 350 mcg Tablet, 28 Tablets/Cycle"
 
 # Pagination + timing
 timeouts:
@@ -105,6 +104,13 @@ output:
   dir: "./run_data/extracts"       # local folder the .xlsx lands in
   sheet_name: "GFPVAN Extract"     # worksheet name inside the workbook
   master_filename: "gfpvan_master.xlsx"  # persistent workbook, upserted via dedup_key
+  download_dir: "./run_data/downloads"   # where export_results_tsv() saves each page's .tsv
+
+extraction:
+  method: "download"    # "download" (confirmed real Export flow) or "scrape" (older DOM-scraping path, unconfirmed)
+  select_all: true      # confirmed real UI: the Collaboration Selector page is meant to be
+                         # select-all + View, not filtered by a "Review Status" column - see
+                         # SKILL.md's "Collaboration Selector grid" section
 
 landing:
   dir: "./run_data/landing"        # raw payload staging, before any validation/reshaping
@@ -252,10 +258,12 @@ selectors:
       - "table tbody tr"
       - "[role='row']:not([role='columnheader'])"
 
-    # NOT YET WIRED UP: select_approved_rows() currently hardcodes
-    # "input[type=checkbox]" inline rather than reading this key. Harmless
-    # duplication for now - update the code to use this selector if the
-    # checkbox markup ever needs a fallback list.
+    # Confirmed real markup: the same eto-checkbox component used by the
+    # autocomplete widgets (<input type=checkbox> + visible styled
+    # <span class="eto-checkbox__box">). _check_eto_checkbox() in scraper.py
+    # tries this input directly first (via .check()), then falls back to
+    # clicking .eto-checkbox__box (hardcoded there, not config-driven, since
+    # it's intrinsic to the component itself, not page-specific).
     row_checkbox:
       - "input[type=checkbox]"
 
@@ -265,12 +273,38 @@ selectors:
     header_review_status_inventory:
       - "th:has-text('Review Status - Inventory')"
 
+    # NOT scoped to <thead> - confirmed the real grid doesn't reliably have
+    # that wrapper. select_all_rows() takes the FIRST match within the
+    # results table (results.table selector), not assuming any particular
+    # table markup around it.
     select_all_checkbox:
-      - "thead input[type=checkbox]"
+      - "input[type=checkbox]"
 
+    # Confirmed real button: id="goto-tab" is stable here (unlike the
+    # autocomplete widgets' random-UUID ids), but data-on-click is still
+    # tried first as the more precise, unambiguous target.
     view_button:
+      - "button[data-on-click='javascript:onClickView()']"
+      - "#goto-tab"
       - "button:has-text('View')"
       - "role=button[name='View']"
+
+    # Confirmed real UI on the pivot table page: a download icon
+    # (<i class="md-icon">get_app</i>) opens two options. Export gives a
+    # direct .tsv download (implemented via export_results_tsv() in
+    # scraper.py); File Download navigates to ioDocs.do and needs a further
+    # 'Next' click to get a .xlsx - documented, not yet implemented.
+    download_icon:
+      - "i.md-icon:text-is('get_app')"
+      - "button:has(i.md-icon:text-is('get_app'))"
+
+    export_option:
+      - "text=Export"
+
+    # NOT YET WIRED UP: no code currently drives this path - see
+    # export_results_tsv()'s docstring in scraper.py.
+    file_download_option:
+      - "text=File Download"
 
     next_page_button:
       - "button[aria-label='Next page']"
