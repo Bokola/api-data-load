@@ -1,0 +1,393 @@
+# ----------------------------------------------------------------------------
+# GFPVAN automation config. Everything here is hot-swappable without code edits.
+#
+# Two families of sections:
+#   - urls / approved_statuses / records_per_page / retry / selectors /
+#     dropdown_options / metric_to_column / excel_columns / dedup_key
+#     -> the real, tested values for the e2open-hosted GFPVAN portal.
+#   - headless / browser / credentials / output / landing / validation /
+#     reconciliation
+#     -> pipeline infrastructure added on top (anti-detection, session
+#        persistence, staging, schema checks, reconciliation).
+#
+# See the "NOT YET WIRED UP" notes near the bottom - a few sections here
+# describe behavior the current code doesn't implement yet.
+# ----------------------------------------------------------------------------
+
+headless: false         # set false while developing so you can watch it run
+root: "./run_data"      # base dir; scraper creates root/screenshots under this
+
+browser:
+  stealth: true                                   # apply playwright-stealth to the context
+  # user_agent: "Mozilla/5.0 ..."                  # uncomment to override; otherwise scraper.py's DEFAULT_USER_AGENT is used
+  locale: "en-US"
+  timezone: "Africa/Nairobi"                       # matches your network origin
+  storage_state_path: "./run_data/storage_state.json"  # persisted session, reused across runs
+
+credentials:
+  # Prefer environment variables over hardcoding secrets in this file.
+  # Config loader should read these from env if the literal value is empty.
+  username_env: "GFPVAN_USERNAME"
+  password_env: "GFPVAN_PASSWORD"
+
+urls:
+  login: "https://authn.e2open.com/ui/#/"
+  launchpad: "https://launchpad.e2open.com/"          # post-login landing (best guess)
+  gfpvan_home: "https://gfpvan.e2open.com/GFPVAN_sc/e2sc/home.do"
+  # Optional: a Playwright glob/regex confirmed against the real post-login
+  # redirect (e.g. "**launchpad.e2open.com**"). Without this, login() falls
+  # back to "the hostname changed away from urls.login's host" - correct for
+  # e2open's cross-subdomain SSO, but confirm this against a real login once
+  # you can watch it happen (headless: false) and set an explicit pattern if
+  # the fallback isn't reliable in practice.
+  # login_success_pattern: "**launchpad.e2open.com**"
+
+# Status values to keep. Anything not in this list is skipped.
+approved_statuses:
+  - "Ready to Use Approved"
+
+# Search restricted to these countries (run ONE AT A TIME - see scraper.py's
+# run_search(country, products), called in a loop by main.py) and these
+# specific L5 products (all five searched together, per country).
+#
+# Matching against the real dropdown is by exact text OR substring either
+# direction (see _select_dropdown_options in scraper.py), so minor
+# formatting differences (e.g. trailing comma, extra space) are tolerated -
+# but if a name here doesn't match the portal's option text at all,
+# run_search() raises rather than silently searching with fewer products
+# than you asked for.
+search_scope:
+  countries:
+    - "Kenya"
+  l5_products:
+    - "Medroxyprogesterone Acetate 104 mg/0.65 mL, Subcutaneous, Pre-Filled Device"
+    - "Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular"
+    - "Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule, Intramuscular"
+    - "Norethisterone Enantate 200 mg/mL (1mL) Ampoule, Intramuscular"
+    - "Norethisterone 350 mcg Tablet, 28 Tablets/Cycle"
+
+# Pagination + timing
+timeouts:
+  navigation_ms: 60000
+  action_ms: 30000
+  short_ms: 5000
+  autocomplete_results_ms: 8000   # how long to poll for the AJAX results panel after typing
+                                   # (observed real latency: a result that legitimately
+                                   # populated still took close to 4s on the live portal -
+                                   # 8s gives headroom rather than cutting it close)
+  frame_scan_ms: 1000              # per-frame wait when scanning iframes for a selector -
+                                    # short is fine here: a frame that DOES have the element
+                                    # already has it in the DOM by the time we check (a cheap
+                                    # .count() gate runs first), so this only needs to cover
+                                    # "attached but not yet visible", not "doesn't exist"
+records_per_page: 30       # Collaboration Selector page size (matches UI default)
+                            # NOT YET WIRED UP: nothing currently sets this in the
+                            # UI via records_per_page_select - add a step in
+                            # run_search_approved_only() if you want it enforced
+                            # rather than relying on the portal's default.
+
+retry:
+  # General page-level retry (not yet consumed anywhere in scraper.py -
+  # only login() has retry logic today; this is here for when other steps
+  # get the same treatment).
+  max_attempts: 3
+  backoff_seconds: 5
+
+  # The human-paced login retry actually implemented in scraper.py.
+  login:
+    max_attempts: 4              # total tries, including the first
+    base_wait_seconds: 300       # 5 minutes before the first retry
+    backoff_multiplier: 1.5      # 5 min -> 7.5 min -> 11.25 min -> ...
+    max_wait_seconds: 1800       # cap any single wait at 30 minutes
+    jitter_max_seconds: 45       # + up to 45s random, so waits aren't exact
+
+output:
+  dir: "./run_data/extracts"       # local folder the .xlsx lands in
+  sheet_name: "GFPVAN Extract"     # worksheet name inside the workbook
+  master_filename: "gfpvan_master.xlsx"  # persistent workbook, upserted via dedup_key
+
+landing:
+  dir: "./run_data/landing"        # raw payload staging, before any validation/reshaping
+  format: "parquet"                # "parquet" (needs pyarrow) or "json"
+
+validation:
+  fail_on_error: true              # true: halt before writing the .xlsx on a failed check
+                                    # false: log a warning and write anyway (landing file always kept)
+
+reconciliation:
+  tolerance_pct: 1.0               # allowed % difference before a row-count/KPI check is flagged
+  kpi_columns: []                  # numeric columns to cross-check, e.g. ["Approved Quantity"]
+  group_by: "Country Name"         # optional grouping column for per-group KPI comparison; null to compare totals only
+
+# Selectors — ordered list, first match wins. Update here if the DOM changes.
+# Real, e2open-tested selectors are listed first in each list; guessed
+# fallbacks from earlier drafts are appended after them for extra resilience,
+# not because they're known to work.
+selectors:
+  # Best-effort dismissal for a blocking modal (confirmed to exist on this
+  # portal: #prompt-modal.eto-modal.open can appear and intercept every
+  # click). Its trigger and real dismiss button aren't confirmed yet - these
+  # are reasonable guesses; replace with the real selector once you've seen
+  # it (headless: false, or check a diagnostics dump - failures now capture
+  # per-frame HTML correctly even for a raw interaction timeout, not just a
+  # "selector not found" error).
+  common:
+    modal_dismiss_button:
+      - "#prompt-modal button:has-text('OK')"
+      - "#prompt-modal button:has-text('Continue')"
+      - "#prompt-modal button:has-text('Close')"
+      - "#prompt-modal button:has-text('Got it')"
+      - "#prompt-modal button:has-text('Dismiss')"
+      - ".eto-modal.open .eto-modal__close"
+      - ".eto-modal.open [aria-label='Close']"
+      - ".eto-modal.open button"
+
+  login:
+    # Not present in the tested e2open config - authn.e2open.com may not
+    # show a cookie banner at all. Left in as a harmless fallback; login()
+    # already tolerates this selector never matching.
+    cookie_accept_button:
+      - "role=button[name='Agree and proceed']"
+      - "text=Agree and proceed"
+      - "button:has-text('Accept')"
+
+    email_input:
+      - "input[type=email]"
+      - "input[name='email']"
+      - "input[placeholder*='email' i]"
+      - "input[autocomplete='username']"
+
+    # e2open uses one button whose label changes across the email vs
+    # password step (Continue / Login / Sign In / a generic submit). Reused
+    # for both continue_button and submit_button below since first_match()
+    # only returns whichever candidate is actually visible at that point in
+    # the flow.
+    continue_button:
+      - "button:has-text('Continue')"
+      - "button:has-text('Login')"
+      - "button:has-text('Sign In')"
+      - "button[type=submit]"
+
+    password_input:
+      - "input[type=password]"
+      - "input[name='password']"
+      - "input[id*='password' i]"
+      - "input[autocomplete='current-password']"
+
+    submit_button:
+      - "button:has-text('Continue')"
+      - "button:has-text('Login')"
+      - "button:has-text('Sign In')"
+      - "button[type=submit]"
+
+    # Any one of these appearing after a failed redirect is treated as a hard
+    # "credentials rejected" failure rather than a generic timeout.
+    login_error_banner:
+      - "text=/invalid|incorrect|failed/i"
+
+  launchpad:
+    gfpvan_process_manager_link:
+      - "text=GFPVAN Process Manager"
+      - "a:has-text('GFPVAN Process Manager')"
+      - "[data-app-name='GFPVAN']"
+
+  menu:
+    menu_button:
+      - "text=Menu"
+      - "button:has-text('Menu')"
+
+    supply_planning_item:
+      - "text=Supply Planning"
+
+    search_supply_planning_item:
+      - "text=Search Supply Planning"
+
+  search_page:
+    # country_name_field / l5_product_field (label-text xpaths below) are
+    # kept for reference/other uses, but run_search() no longer uses them
+    # for selection - both fields turned out to be AJAX-driven
+    # eto-complex-autocomplete widgets, not static dropdowns. Confirmed
+    # from a captured page (2026-08-24): the label text matched fine, but
+    # there was never a static option list under it to click - the results
+    # panel only populates after typing. See country_name_container /
+    # l5_product_container below, which is what's actually used now.
+    country_name_field:
+      - "xpath=//*[normalize-space()='Country Name']"
+      - "xpath=//*[contains(text(),'Country Name')]"
+
+    l5_product_field:
+      - "xpath=//*[normalize-space()='L5 - Product']"
+      - "xpath=//*[contains(text(),'L5 - Product')]"
+
+    # The actual eto-complex-autocomplete widget containers, confirmed
+    # directly from a captured page - these ids are stable (unlike the
+    # dynamically-numbered #eto13 / #eto29 input ids inside them, which are
+    # NOT safe to hardcode since they're likely to differ across page loads).
+    country_name_container: ["#CustomerDescription__Autocomplete"]
+    l5_product_container: ["#CustItemDescription__Autocomplete"]
+
+    # NOT YET WIRED UP: run_search_approved_only() doesn't currently filter
+    # by this dropdown - it only selects all countries/products then
+    # searches. Add a step here if you want the search itself pre-filtered
+    # rather than filtering client-side after extraction.
+    review_status_inventory_dropdown:
+      - "xpath=//label[contains(.,'Review Status - Inventory')]/following::*[self::select or @role='combobox'][1]"
+
+    search_button:
+      - "button[data-on-click='javascript:search(false)']"
+      - "button.eto-btn--primary:has-text('Search')"
+      - "button:has-text('Search')"
+
+    reset_button:
+      - "button:has-text('Reset')"
+
+  results:
+    table:
+      - "table"
+      - "[role=grid]"
+
+    row:
+      - "tbody tr"
+      - "[role=row]:not(:first-child)"
+      - "table tbody tr"
+      - "[role='row']:not([role='columnheader'])"
+
+    # NOT YET WIRED UP: select_approved_rows() currently hardcodes
+    # "input[type=checkbox]" inline rather than reading this key. Harmless
+    # duplication for now - update the code to use this selector if the
+    # checkbox markup ever needs a fallback list.
+    row_checkbox:
+      - "input[type=checkbox]"
+
+    # NOT YET WIRED UP: select_approved_rows() finds this column by scanning
+    # all header cells' text for a substring match, not via this selector.
+    # Kept here for reference / for use by any code that wants a direct hit.
+    header_review_status_inventory:
+      - "th:has-text('Review Status - Inventory')"
+
+    select_all_checkbox:
+      - "thead input[type=checkbox]"
+
+    view_button:
+      - "button:has-text('View')"
+      - "role=button[name='View']"
+
+    next_page_button:
+      - "button[aria-label='Next page']"
+      - "button:has-text('>')"
+      - "role=button[name='Next Page']"
+
+    prev_page_button:
+      - "button[aria-label='Previous page']"
+      - "button:has-text('<')"
+
+    page_indicator:
+      - "text=/Page\\s+\\d+\\s+of\\s+\\d+/"
+
+    records_per_page_select:
+      - "select[aria-label*='Records']"
+      - "select:near(:text('Records Per Page'))"
+
+  multi_collab:
+    container:
+      - "text=Multi-Collab View"
+      - "[data-component='multi-collab-view']"
+      - ".multi-collab-container"
+
+    # NOT YET CONSUMED: nothing in extract.py reads the Multi-Collab metric
+    # grid yet - extract.py currently pulls from the Search Results grid
+    # (results.row above), not from inside this view. See the note under
+    # metric_to_column below - that mapping only matters once a Multi-Collab
+    # extractor exists.
+    collab_block:
+      - "[data-collab-id]"
+      - "div.collab"
+      - "tr.collab-header"
+
+    bucket_header_row:
+      - "thead tr:has-text('2025'), thead tr:has-text('2026')"
+
+    metric_row:
+      - "tr:has(td:nth-child(1))"
+
+    back_button:
+      - "text=Collaboration Selector"
+      - "button:has-text('Back')"
+      - "role=button[name='Back to Results']"
+
+# Discovery of Country / Product is dynamic (read from the dropdown options).
+# These XPaths are how we enumerate them.
+# NOT YET WIRED UP: no code currently reads dropdown_options - the current
+# flow just clicks "Select All" in run_search_approved_only() rather than
+# enumerating individual options.
+dropdown_options:
+  country_options_xpath: "//ul[contains(@class,'options') or @role='listbox']//li"
+  product_options_xpath: "//ul[contains(@class,'options') or @role='listbox']//li"
+
+# Mapping from GFPVAN metric names -> target Excel column names.
+# Anything not mapped is still kept, prefixed with 'raw_'.
+# NOT YET WIRED UP: this belongs to a Multi-Collab metric extractor that
+# doesn't exist yet (see multi_collab notes above). extract.py's current
+# grid extraction doesn't produce "metric name" rows to map through this -
+# it just carries over whatever column headers the Search Results grid has.
+metric_to_column:
+  "Monthly Consumption": "Projected Consumption"
+  "In Process Requisitions": "In Process Requisitions"
+  "Unordered Requisitions": "Unordered Requisitions"
+  "Un-Shipped Orders": "Un-Shipped Orders"
+  "Scheduled Un-Referenced Shipments": "Scheduled Un-Referenced Shipments"
+  "In-Transit Shipments": "In-Transit Shipments"
+  "Received Shipments": "Received Shipments"
+  "Delivered Shipments": "Delivered Shipments"
+  "Supply Plan Inventory": "Projected Supply Plan Inventory (Inc. Intransit and Received Shipments)"
+  "Projected Inventory": "VAN Projections"
+  "Projected MOS": "Projected MOS"
+  "Manual Adjustment": "Unaccounted for Inventory Adjustments"
+  "Projected Inventory Adjustment": "Adjusted Projected"
+
+# Column order written to Excel. Anything extracted but not listed here is appended.
+# NOT YET WIRED UP: write_to_excel() in extract.py writes whatever columns
+# the DataFrame has, in DataFrame order - it doesn't reorder/reindex against
+# this list yet.
+excel_columns:
+  - "Product"
+  - "Country"
+  - "Period"
+  - "Date"
+  - "In Process Requisitions"
+  - "Unordered Requisitions"
+  - "Un-Shipped Orders"
+  - "Scheduled Un-Referenced Shipments"
+  - "In-Transit Shipments"
+  - "Received Shipments"
+  - "Delivered Shipments"
+  - "Projected Consumption"
+  - "Actual Consumption (LMIS)"
+  - "Projected Supply Plan Inventory (Inc. Intransit and Received Shipments)"
+  - "Actual Supply Inventory"
+  - "Central Warehouse (VAN)"
+  - "State Warehouse (VAN)"
+  - "SDP(LMIS)"
+  - "Unaccounted for Inventory Adjustments"
+  - "Consumption Lost due to stockouts"
+  - "Inventory Flow"
+  - "Inventory Flow 2"
+  - "Adjusted Projected"
+  - "Projected MOS"
+  - "VAN Projections"
+  - "Variance"
+  - "VAN Consumption"
+  - "Variance Consumption"
+  - "VAN Inventory Flow"
+  - "VAN Inventory Flow 2"
+  - "VAN projected MOS"
+
+# Dedup key: rows in Excel matching this composite key get updated in place.
+# NOT YET WIRED UP: write_to_excel() always writes a fresh timestamped file
+# today - there's no upsert-into-existing-workbook logic yet. Say the word
+# and I'll add a writer that reads the existing workbook (if any), matches
+# on this key, and updates in place instead of appending duplicates.
+dedup_key:
+  - "Product"
+  - "Country"
+  - "Period"
