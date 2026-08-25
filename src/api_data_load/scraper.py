@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 from playwright.sync_api import (
     Browser,
     BrowserContext,
+    Error as PWError,
     Frame,
     Locator,
     Page,
@@ -548,9 +549,31 @@ class GFPVANScraper:
             link.click()
         except ScraperError:
             log.info("Launchpad link not found, navigating directly to home URL")
-            self.page.goto(self.cfg.get("urls.gfpvan_home"))
+            try:
+                self.page.goto(self.cfg.get("urls.gfpvan_home"))
+            except PWError as e:
+                # net::ERR_ABORTED here commonly means the target page's own
+                # JS fired a client-side redirect before the original
+                # navigation's load event completed - confirmed on a real
+                # run. Chromium reports the ORIGINAL request as aborted even
+                # when the browser correctly ends up on the redirected page,
+                # so this is not necessarily a real failure. Don't treat it
+                # as fatal - wait a moment and let the actual landing URL
+                # (logged here, and implicitly verified by the next step's
+                # own first_match calls) tell the real story.
+                log.warning(
+                    "goto(%s) raised %s - may just be a client-side "
+                    "redirect Chromium reports as aborted. Landed on: %s",
+                    self.cfg.get("urls.gfpvan_home"), e, self.page.url,
+                )
+                self.page.wait_for_timeout(2000)
 
-        self.page.wait_for_load_state("networkidle")
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=15000)
+        except PWTimeout:
+            log.debug(
+                "networkidle wait after opening GFPVAN timed out - continuing anyway"
+            )
 
     # ---------------------------------------------------------------- open Search page
     def open_search_supply_planning(self) -> None:
@@ -1623,20 +1646,43 @@ class GFPVANScraper:
         return dest
 
     def back_to_results(self) -> None:
-        """Return to the Collaboration Selector results page."""
+        """Return to the Collaboration Selector results page.
+
+        networkidle waits here are bounded and non-fatal: confirmed on a
+        real run that go_back()'s wait_for_load_state("networkidle") hit
+        the full 60s navigation timeout and crashed the entire multi-
+        country pipeline - this portal's JS likely polls continuously,
+        which can prevent networkidle from ever firing at all. Failing to
+        confirm "the page fully settled after going back" is not worth
+        aborting an otherwise-successful run over: the next page's own
+        first_match() calls will discover the real state regardless.
+        """
         assert self.page is not None
         try:
             self.first_match(
                 self.cfg.selectors("multi_collab.back_button"), timeout_ms=5000
             ).click()
-            self.page.wait_for_load_state("networkidle")
+            try:
+                self.page.wait_for_load_state("networkidle", timeout=15000)
+            except PWTimeout:
+                log.debug(
+                    "networkidle wait after clicking back timed out - continuing anyway"
+                )
             return
         except ScraperError:
             pass
         # Fallback: browser back
         log.info("No back link found - using browser history")
         self.page.go_back()
-        self.page.wait_for_load_state("networkidle")
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=15000)
+        except PWTimeout:
+            log.warning(
+                "networkidle wait after go_back() timed out - this portal's "
+                "JS may poll continuously, preventing networkidle from ever "
+                "firing. Continuing anyway; the next operation's own "
+                "first_match() will confirm the real page state."
+            )
 
 
 def open_browser(cfg: Config) -> GFPVANScraper:
