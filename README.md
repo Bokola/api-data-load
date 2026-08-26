@@ -28,8 +28,8 @@ uv run playwright install chromium
 # If your OS is missing shared libs Chromium needs, use --with-deps instead
 # (needs sudo/apt access): uv run playwright install chromium --with-deps
 
-# 3. Set credentials (never commit real values)
-cp .env.example .env
+# 3. Set credentials (never commit real values) (windows) - use touch for linux
+New-Item  .env
 # edit .env with your real GFPVAN_USERNAME / GFPVAN_PASSWORD
 ```
 
