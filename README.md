@@ -33,31 +33,6 @@ cp .env.example .env
 # edit .env with your real GFPVAN_USERNAME / GFPVAN_PASSWORD
 ```
 
-## Call graph
-
-main.py
- ├─ config.py           Config.load()
- ├─ scraper.py           open_browser() → GFPVANScraper:
- │                         ensure_logged_in() → login() → _login_once()
- │                         open_gfpvan(), open_search_supply_planning()
- │                         run_search()  → _select_dropdown_options()
- ├─ multi_collab_extract.py   run_multi_collab_extraction(scraper, ...)
- │    └─ calls scraper's select_approved_rows() / open_view() /
- │              back_to_results() / goto_next_page() in a loop
- │    └─ extract_metric_grid() → _extract_bucket_headers(), _extract_block_metrics()
- │    └─ reshape_to_wide()
- ├─ landing.py            stage_raw(records, cfg)
- ├─ schema_validation.py  validate_extract(df, schema=MULTI_COLLAB_SCHEMA)
- ├─ extract.py            upsert_to_excel(df, cfg) → _reorder_columns(), _write_formatted_excel()
- └─ reconciliation.py     load_baseline(), reconcile(), write_reconciliation_report()
-                          (only if --baseline was passed)
-
-extract.py  (independent, older Search-Results-grid path; not used by main.py's
-             run(), but still imports scraper/landing/schema_validation the same way)
- ├─ scraper.py       (type hints only)
- ├─ landing.py        stage_raw()
- └─ schema_validation.py  validate_extract()
-
 ## Running
 
 `Config.load()` loads `.env` itself via `python-dotenv` (searching upward from
@@ -98,6 +73,44 @@ src/gfpvan_pipeline/
   reconciliation.py       automated vs. manual-baseline comparison
   main.py                 end-to-end orchestrator + CLI
 run_data/               gitignored - screenshots, landing zone, extracts, session state
+```
+
+## Call graph
+
+```
+main.py
+ ├─ config.py            Config.load()
+ ├─ logger.py             enable_file_logging() → one timestamped run_data/logs/pipeline_*.log per run
+ ├─ scraper.py            open_browser() → GFPVANScraper:
+ │                          ensure_logged_in() → login() → _login_once()
+ │                          open_gfpvan(), open_search_supply_planning()   (re-run before EVERY country)
+ │                          run_search() → _select_autocomplete_option(), _clear_autocomplete_selections()
+ │                          _wait_networkidle()   (every networkidle wait goes through this - see below)
+ ├─ multi_collab_extract.py
+ │    ├─ extraction.method: "download" (default) - the confirmed real export flow:
+ │    │     run_download_extraction(scraper, download_dir, country, ...)
+ │    │       └─ calls scraper's select_approved_rows() / select_all_rows() → open_view() →
+ │    │                 export_results_tsv() → back_to_results() → goto_next_page(), in a loop
+ │    │       └─ parse_mcv_tsv() and parse_mcv_tsv_long() → _parse_mcv_long_records()  (shared core)
+ │    │       returns (wide_df, long_df)
+ │    └─ extraction.method: "scrape" (older DOM-scraping fallback, unconfirmed against the real portal):
+ │          run_multi_collab_extraction(scraper, ...)
+ │            └─ calls scraper's select_approved_rows() / open_view() / back_to_results() /
+ │                      goto_next_page() in a loop
+ │            └─ extract_metric_grid() → _extract_bucket_headers(), _extract_block_metrics()
+ │            └─ reshape_to_wide()
+ ├─ landing.py             stage_raw(records, cfg)
+ ├─ schema_validation.py   validate_extract(wide_df, schema=MULTI_COLLAB_SCHEMA)
+ ├─ extract.py             upsert_to_excel(wide_df, cfg) → _reorder_columns(), _write_formatted_excel()
+ ├─ main.py                _write_country_csv(long_df, country, cfg)   (one CSV per country, long format)
+ └─ reconciliation.py      load_baseline(), reconcile(), write_reconciliation_report()
+                           (only if --baseline was passed)
+
+extract.py  (independent, older Search-Results-grid path; not used by main.py's
+             run(), but still imports scraper/landing/schema_validation the same way)
+ ├─ scraper.py       (type hints only)
+ ├─ landing.py        stage_raw()
+ └─ schema_validation.py  validate_extract()
 ```
 
 ## Common issues
