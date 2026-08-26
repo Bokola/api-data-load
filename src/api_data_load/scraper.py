@@ -171,6 +171,34 @@ class GFPVANScraper:
             log.warning("Could not capture screenshot: %s", e)
         return path
 
+    def _wait_networkidle(self, timeout_ms: int = 15000) -> None:
+        """wait_for_load_state("networkidle"), bounded and non-fatal.
+
+        Confirmed the hard way, more than once: this portal's JS can poll
+        continuously, which can prevent networkidle from ever firing at
+        all. A bare, unbounded wait_for_load_state("networkidle") call
+        then hits the page's default navigation timeout (60s - config's
+        timeouts.navigation_ms) and crashes the entire pipeline - this
+        happened for real in at least three separate methods
+        (back_to_results(), open_gfpvan(), open_search_supply_planning())
+        before this was centralized, each discovered and fixed
+        independently instead of once. Failing to confirm "the page fully
+        settled" is not worth aborting an otherwise-successful multi-
+        country run over - the next operation's own first_match() calls
+        discover the real state regardless.
+
+        Every wait_for_load_state("networkidle") call in this class should
+        go through this method, not call page.wait_for_load_state directly
+        - a bare call is exactly what caused each of those crashes.
+        """
+        assert self.page is not None
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=timeout_ms)
+        except PWTimeout:
+            log.debug(
+                "networkidle wait timed out after %dms - continuing anyway", timeout_ms
+            )
+
     def dump_diagnostics(self, tag: str) -> None:
         """On a selector failure: save a screenshot, dump the HTML of EVERY
         frame (main page + all iframes) separately, and log every iframe
@@ -346,7 +374,7 @@ class GFPVANScraper:
         if self.storage_state_path.exists():
             log.info("Verifying saved session is still valid")
             self.page.goto(self.cfg.get("urls.gfpvan_home"))
-            self.page.wait_for_load_state("networkidle")
+            self._wait_networkidle()
             if self._looks_logged_in():
                 log.info("Saved session is valid - skipping login")
                 return
@@ -440,7 +468,7 @@ class GFPVANScraper:
                 # URL, so this is a hard failure, not transient.
                 raise ScraperError(f"Login page returned unexpected HTTP {status}.")
 
-        self.page.wait_for_load_state("networkidle")
+        self._wait_networkidle()
 
         # Cookie banner
         try:
@@ -559,8 +587,8 @@ class GFPVANScraper:
                 # when the browser correctly ends up on the redirected page,
                 # so this is not necessarily a real failure. Don't treat it
                 # as fatal - wait a moment and let the actual landing URL
-                # (logged here, and implicitly verified by the next step's
-                # own first_match calls) tell the real story.
+                # (checked below, and implicitly verified by the next
+                # step's own first_match calls) tell the real story.
                 log.warning(
                     "goto(%s) raised %s - may just be a client-side "
                     "redirect Chromium reports as aborted. Landed on: %s",
@@ -568,12 +596,25 @@ class GFPVANScraper:
                 )
                 self.page.wait_for_timeout(2000)
 
-        try:
-            self.page.wait_for_load_state("networkidle", timeout=15000)
-        except PWTimeout:
-            log.debug(
-                "networkidle wait after opening GFPVAN timed out - continuing anyway"
+        # Confirmed real failure mode: a session can be invalidated moments
+        # after a fresh login, landing back on a login/session-expired page
+        # instead of GFPVAN itself. Continuing silently past this produces
+        # a confusing downstream error several steps later ("None of the
+        # selectors matched: ['text=Menu'...]") instead of naming the
+        # actual problem here, where the evidence still exists. Checking
+        # the URL directly is more honest than waiting for some unrelated
+        # later selector to fail.
+        current_url = self.page.url
+        if "logon.do" in current_url or "sessionExpired" in current_url:
+            self.dump_diagnostics("session_expired_after_login")
+            raise TransientError(
+                f"Landed back on what looks like a login/session-expired "
+                f"page ({current_url}) immediately after opening GFPVAN - "
+                f"the session was invalidated right after logging in. This "
+                f"may be transient; a retry may succeed."
             )
+
+        self._wait_networkidle()
 
     # ---------------------------------------------------------------- open Search page
     def open_search_supply_planning(self) -> None:
@@ -590,7 +631,7 @@ class GFPVANScraper:
             ).click()
         except ScraperError:
             log.debug("No 'Search Supply Planning' sub-item - assuming direct navigation")
-        self.page.wait_for_load_state("networkidle")
+        self._wait_networkidle()
 
     # ---------------------------------------------------------------- configure + run search
     def _select_dropdown_options(
@@ -1225,7 +1266,7 @@ class GFPVANScraper:
             self.first_match(
                 self.cfg.selectors("search_page.search_button")
             ).click()
-            self.page.wait_for_load_state("networkidle")
+            self._wait_networkidle()
             try:
                 # poll_for_new_frames=True here specifically: the search
                 # form's own hidden context form targets target="rcp_content"
@@ -1296,7 +1337,7 @@ class GFPVANScraper:
         self.first_match(
             self.cfg.selectors("search_page.search_button")
         ).click()
-        self.page.wait_for_load_state("networkidle")
+        self._wait_networkidle()
         # Belt-and-braces: also wait for a concrete results marker, since
         # networkidle can fire before a heavy grid finishes rendering.
         try:
@@ -1333,7 +1374,7 @@ class GFPVANScraper:
                 # at the real, enabled control.
                 continue
             loc.click()
-            self.page.wait_for_load_state("networkidle")
+            self._wait_networkidle()
             return True
         return False
 
@@ -1613,13 +1654,25 @@ class GFPVANScraper:
             return True
         except ScraperError:
             pass
-        self.page.wait_for_load_state("networkidle")
+        self._wait_networkidle()
         return True
 
     def export_results_tsv(self, download_dir: Path | str) -> Path:
-        """From the pivot table view, click the download icon then
-        'Export' to get a direct .tsv download. Returns the path the file
-        was saved to.
+        """Select every view/row in the Multi-Collab View pivot grid, then
+        click the download icon and 'Export' to get a direct .tsv download.
+        Returns the path the file was saved to.
+
+        Confirmed real bug: the pivot grid has its OWN select-all checkbox,
+        distinct from the Collaboration Selector's - a real capture shows
+        <th data-column="Checkbox"> containing
+        <input class="eto-checkbox__field all-rows-indicator" type="checkbox"
+        name="ALL">, and each individual row has its own
+        name="filteredCollabs" checkbox. Without checking "ALL" first,
+        Export only includes whatever's selected by default - confirmed:
+        downloading just one view while the rest were silently skipped,
+        even though multiple rows (distinct Country/Bucket/Product
+        combinations, each with a different collab id) were present in the
+        grid.
 
         Confirmed real UI: a download icon (<i class="md-icon">get_app</i>)
         opens two options - 'Export' (direct .tsv download, used here) and
@@ -1632,6 +1685,24 @@ class GFPVANScraper:
         assert self.page is not None
         download_dir = Path(download_dir)
         download_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            checkbox_container = self.first_match(
+                self.cfg.selectors("multi_collab.select_all_checkbox"),
+                timeout_ms=self.cfg.get("timeouts.short_ms", 5000),
+            )
+            if not self._check_eto_checkbox(checkbox_container):
+                log.warning(
+                    "Could not confirm the Multi-Collab View 'select all' "
+                    "checkbox was checked - the export may only include "
+                    "one view instead of all of them"
+                )
+        except ScraperError:
+            log.warning(
+                "Could not find the Multi-Collab View 'select all' "
+                "checkbox - the export may only include one view instead "
+                "of all of them"
+            )
 
         self.first_match(self.cfg.selectors("results.download_icon")).click()
         export_option = self.first_match(self.cfg.selectors("results.export_option"))
@@ -1648,41 +1719,24 @@ class GFPVANScraper:
     def back_to_results(self) -> None:
         """Return to the Collaboration Selector results page.
 
-        networkidle waits here are bounded and non-fatal: confirmed on a
-        real run that go_back()'s wait_for_load_state("networkidle") hit
-        the full 60s navigation timeout and crashed the entire multi-
-        country pipeline - this portal's JS likely polls continuously,
-        which can prevent networkidle from ever firing at all. Failing to
-        confirm "the page fully settled after going back" is not worth
-        aborting an otherwise-successful run over: the next page's own
-        first_match() calls will discover the real state regardless.
+        networkidle waits go through self._wait_networkidle() - see that
+        method's docstring for why (confirmed on a real run that a bare
+        wait_for_load_state("networkidle") here crashed the entire multi-
+        country pipeline after hitting the full 60s default timeout).
         """
         assert self.page is not None
         try:
             self.first_match(
                 self.cfg.selectors("multi_collab.back_button"), timeout_ms=5000
             ).click()
-            try:
-                self.page.wait_for_load_state("networkidle", timeout=15000)
-            except PWTimeout:
-                log.debug(
-                    "networkidle wait after clicking back timed out - continuing anyway"
-                )
+            self._wait_networkidle()
             return
         except ScraperError:
             pass
         # Fallback: browser back
         log.info("No back link found - using browser history")
         self.page.go_back()
-        try:
-            self.page.wait_for_load_state("networkidle", timeout=15000)
-        except PWTimeout:
-            log.warning(
-                "networkidle wait after go_back() timed out - this portal's "
-                "JS may poll continuously, preventing networkidle from ever "
-                "firing. Continuing anyway; the next operation's own "
-                "first_match() will confirm the real page state."
-            )
+        self._wait_networkidle()
 
 
 def open_browser(cfg: Config) -> GFPVANScraper:

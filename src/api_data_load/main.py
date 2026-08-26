@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +19,7 @@ import pandas as pd
 from .config import Config, ConfigError
 from .extract import upsert_to_excel
 from .landing import stage_raw
-from .logger import get_logger
+from .logger import enable_file_logging, get_logger
 from .multi_collab_extract import run_download_extraction, run_multi_collab_extraction
 from .reconciliation import reconcile, write_reconciliation_report
 from .schema_validation import MULTI_COLLAB_SCHEMA, validate_extract
@@ -29,6 +30,30 @@ log = get_logger(__name__)
 
 class PipelineError(RuntimeError):
     pass
+
+
+def _write_country_csv(df: pd.DataFrame, country: str, cfg: Config) -> Path | None:
+    """Write one country's extracted data to its own CSV, named
+    '{country}_{datestamp}.csv' - e.g. Kenya_20260826.csv.
+
+    datestamp is date-only (%Y%m%d), not a full timestamp - re-running for
+    the same country on the same day overwrites that day's file rather
+    than accumulating one per run. Set output.csv_datestamp_format in
+    config.yaml (a strftime string) to something like "%Y%m%d_%H%M%S" if
+    you want a separate file per run instead.
+    """
+    if df.empty:
+        log.warning("Not writing a CSV for %s - no rows extracted", country)
+        return None
+    csv_dir = Path(cfg.get("output.csv_dir", "./run_data/csv_exports"))
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    datestamp_format = cfg.get("output.csv_datestamp_format", "%Y%m%d")
+    datestamp = datetime.now().strftime(datestamp_format)
+    safe_country = str(country).replace("/", "-").replace("\\", "-")
+    path = csv_dir / f"{safe_country}_{datestamp}.csv"
+    df.to_csv(path, index=False)
+    log.info("Wrote %d row(s) for %s to %s", len(df), country, path)
+    return path
 
 
 def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = None) -> Path:
@@ -65,11 +90,31 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
     with open_browser(cfg) as s:
         s.ensure_logged_in()
         s.open_gfpvan()
-        s.open_search_supply_planning()
 
         for country in countries:
             log.info("=== Country %d/%d: %s ===", countries.index(country) + 1, len(countries), country)
+            # Re-navigate to the search form before EVERY country, not just
+            # the first. Confirmed real bug: after one country's full
+            # round-trip (search -> select -> View -> download ->
+            # back_to_results()), the browser lands back on the
+            # Collaboration Selector results grid - NOT the original search
+            # form. back_to_results() only returns to the results page, by
+            # design; it was never meant to also get back to the search
+            # form. Calling open_search_supply_planning() only once, before
+            # the loop, worked for the very first country purely because
+            # nothing had navigated away yet - every subsequent country's
+            # run_search() then failed immediately (its very first selector
+            # lookup, #CustomerDescription__Autocomplete, simply isn't on
+            # the results grid). This was never caught before because no
+            # earlier run had gotten far enough to finish even one country.
             try:
+                # Reset to a known-good starting point before EVERY
+                # country, not just the first - open_gfpvan() first (its
+                # goto()-fallback path works regardless of current page
+                # state, unlike a menu click that assumes a specific page's
+                # UI is present), then open_search_supply_planning().
+                s.open_gfpvan()
+                s.open_search_supply_planning()
                 s.run_search(country, products)
             except ScraperError as e:
                 log.error("Search failed for %s: %s - skipping this country", country, e)
@@ -77,11 +122,13 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
 
             if extraction_method == "scrape":
                 country_df = run_multi_collab_extraction(s, max_pages=max_pages)
+                long_df = pd.DataFrame()  # the DOM-scrape path doesn't produce this shape
             else:
                 download_dir = cfg.get("output.download_dir", "./run_data/downloads")
-                country_df = run_download_extraction(
+                country_df, long_df = run_download_extraction(
                     s,
                     download_dir=download_dir,
+                    country=country,
                     max_pages=max_pages,
                     select_all=cfg.get("extraction.select_all", False),
                 )
@@ -89,6 +136,17 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
                 log.warning("No rows extracted for %s", country)
             else:
                 per_country_frames.append(country_df)
+                if cfg.get("output.write_csv", True):
+                    # Long format for CSV - matches a manually-downloaded
+                    # reference export exactly (Country Name/Supply Plan
+                    # Bucket Description/L5 - Product/DataMeasure/Date/
+                    # Value), confirmed against real files rather than the
+                    # wide-by-metric shape the master workbook uses. Falls
+                    # back to the wide df for the "scrape" extraction
+                    # method, which doesn't produce a long_df at all.
+                    _write_country_csv(
+                        long_df if not long_df.empty else country_df, country, cfg
+                    )
 
     wide_df = (
         pd.concat(per_country_frames, ignore_index=True)
@@ -149,6 +207,9 @@ def main() -> int:
     except ConfigError as e:
         log.error("Config error: %s", e)
         return 1
+
+    log_path = enable_file_logging(cfg.get("output.log_dir", "./run_data/logs"))
+    log.info("Logging this run to %s", log_path)
 
     try:
         master_path = run(cfg, max_pages=args.max_pages, baseline_path=args.baseline)

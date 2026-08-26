@@ -14,7 +14,7 @@
 # describe behavior the current code doesn't implement yet.
 # ----------------------------------------------------------------------------
 
-headless: false         # set false while developing so you can watch it run
+headless: false          # set false while developing so you can watch it run
 root: "./run_data"      # base dir; scraper creates root/screenshots under this
 
 browser:
@@ -59,6 +59,11 @@ approved_statuses:
 search_scope:
   countries:
     - "Kenya"
+    - "Nigeria"
+    - "Malawi"
+    - "Mozambique"
+    - "Zambia"
+    - "Uganda"
   l5_products:
     - "Medroxyprogesterone Acetate 104 mg/0.65 mL, Subcutaneous, Pre-Filled Device"
     - "Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular"
@@ -105,6 +110,11 @@ output:
   sheet_name: "GFPVAN Extract"     # worksheet name inside the workbook
   master_filename: "gfpvan_master.xlsx"  # persistent workbook, upserted via dedup_key
   download_dir: "./run_data/downloads"   # where export_results_tsv() saves each page's .tsv
+  write_csv: true                        # also write one CSV per country, alongside the master xlsx
+  csv_dir: "./run_data/csv_exports"      # where per-country CSVs land, named {country}_{datestamp}.csv
+  csv_datestamp_format: "%Y%m%d"         # date-only by default; re-running same country/day overwrites -
+                                          # use "%Y%m%d_%H%M%S" for a separate file per run instead
+  log_dir: "./run_data/logs"             # one timestamped pipeline_YYYYMMDD_HHMMSS.log per run
 
 extraction:
   method: "download"    # "download" (confirmed real Export flow) or "scrape" (older DOM-scraping path, unconfirmed)
@@ -327,6 +337,13 @@ selectors:
       - "text=Multi-Collab View"
       - "[data-component='multi-collab-view']"
       - ".multi-collab-container"
+
+    # Confirmed real markup: the pivot grid's OWN select-all checkbox,
+    # distinct from the Collaboration Selector's. Container is the header
+    # cell; _check_eto_checkbox() finds the actual
+    # input.all-rows-indicator[name=ALL] within it.
+    select_all_checkbox:
+      - "th[data-column='Checkbox']"
 
     # NOT YET CONSUMED: nothing in extract.py reads the Multi-Collab metric
     # grid yet - extract.py currently pulls from the Search Results grid

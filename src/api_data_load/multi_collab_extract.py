@@ -45,6 +45,8 @@ Flow, chained onto the scraper + select_approved_rows flow:
 """
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 
 from .config import Config
@@ -247,15 +249,225 @@ def run_multi_collab_extraction(
     return reshape_to_wide(all_records, cfg)
 
 
+_MONTH_COLUMN_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+_UNNAMED_COLUMN_PATTERN = re.compile(r"^(Unnamed: \d+|__unnamed_\d+__)$")
+
+
+def _parse_mcv_long_records(tsv_path, country: str) -> list[dict]:
+    """Shared parsing core for a downloaded Multi-Collab View .tsv. Reads
+    the file and returns long-format records - one per (product, bucket,
+    metric, month) reading - with keys 'Country Name', 'Supply Plan Bucket
+    Description', 'L5 - Product', 'DataMeasure', 'Date', 'Value'.
+
+    Both parse_mcv_tsv() (wide, pivots metrics into columns, for the
+    master workbook/schema validation) and parse_mcv_tsv_long() (for CSV
+    export, matching a manually-downloaded reference export exactly)
+    build on this, so the actual file-reading and column-identification
+    logic - the genuinely tricky part, confirmed against a real file, see
+    the docstrings below for what was wrong before - exists in exactly
+    one place.
+
+    Confirmed real structure from an actual downloaded file (not guessed):
+      - File line 1 is title/metadata ('Collaboration View', a bucket
+        date-range note) - not real headers. pandas' header=1 skips it and
+        uses line 2 (the real header row) instead.
+      - The real header row names the static per-record attributes
+        (Country ISO Code, Supply Plan Bucket Description, L5 - Product,
+        Review Status - Inventory, ...) and, later, one column per monthly
+        bucket (2026-02, 2026-03, ...). TWO columns in between are blank
+        even in this header line - one of them holds the metric name on
+        metric rows (see below); confirmed a real file can have more than
+        one blank-named column, which breaks any column lookup by name
+        unless they're first made unique.
+      - Each product/country "block" spans multiple rows: one MASTER row
+        (static attributes populated, metric-name and bucket-value columns
+        blank) followed by several METRIC rows (static columns blank, the
+        unlabeled metric-name column holds a name like 'Monthly
+        Consumption', and the monthly columns hold that metric's value per
+        period).
+
+    `country` is the country actually searched (e.g. 'Kenya'), not the
+    ISO code (e.g. 'KE') this export's own 'Country ISO Code' column
+    holds - confirmed a manually-downloaded reference export uses the
+    full name for this, so it's taken as a parameter here rather than
+    guessing an ISO-to-name mapping table.
+
+    DataMeasure values are the RAW metric name exactly as the export
+    provides it (e.g. 'Projected Inventory Adjustment') - NOT run through
+    metric_to_column. That mapping exists specifically for the wide
+    shape's column names and would rename things a manual reference
+    export leaves alone.
+    """
+    raw = pd.read_csv(tsv_path, sep="\t", header=1)
+
+    # Make every blank/NaN column name unique by position BEFORE any
+    # column-based indexing - defensive: confirmed a real file's blank
+    # header cells actually come back from pandas as "Unnamed: N" strings
+    # (not NaN), which are already unique by position, but this guards
+    # against a literal NaN column name from some other read path too.
+    raw.columns = [
+        c if pd.notna(c) else f"__unnamed_{i}__"
+        for i, c in enumerate(raw.columns)
+    ]
+
+    month_cols = [c for c in raw.columns if isinstance(c, str) and _MONTH_COLUMN_PATTERN.fullmatch(c)]
+    if not month_cols:
+        raise ValueError(f"Could not find any monthly bucket columns (YYYY-MM) in {tsv_path}")
+    first_month_pos = raw.columns.get_loc(month_cols[0])
+
+    # Find the metric-name column by identity, not a fixed positional
+    # offset. An earlier version assumed it always sits exactly 2
+    # positions before the first month column - true for one real file
+    # (which happens to have exactly 2 blank-named columns there), but
+    # WRONG in general: a file with a different number of blank columns
+    # would silently pick the wrong column (confirmed: a simpler test
+    # structure with only 1 blank column made this offset land on
+    # "L5 - Product" itself, corrupting every metric name). Instead, scan
+    # every unnamed column before the first month column (matching
+    # pandas' own "Unnamed: N" auto-naming for blank header cells, not
+    # just a literal NaN) and pick whichever one actually HAS data - a
+    # genuine spacer column would be entirely empty, unlike the real
+    # metric-name column.
+    unnamed_before_months = [
+        c for c in raw.columns[:first_month_pos] if _UNNAMED_COLUMN_PATTERN.match(str(c))
+    ]
+    if not unnamed_before_months:
+        raise ValueError(
+            f"Could not find an unnamed metric-name column before the first "
+            f"month column in {tsv_path}"
+        )
+    # Pick whichever unnamed column has the MOST populated values, not just
+    # any - confirmed a real file can have more than one unnamed column
+    # with SOME data (e.g. 170 populated rows vs. 10), where the smaller
+    # one is some other secondary field, not the metric name. The genuine
+    # metric-name column is populated on nearly every metric row.
+    metric_col = max(unnamed_before_months, key=lambda c: raw[c].notna().sum())
+
+    # Static attributes are only populated on each block's master row -
+    # forward-fill them down through that block's metric rows.
+    for col in ("Country ISO Code", "Supply Plan Bucket Description", "L5 - Product"):
+        if col in raw.columns:
+            raw[col] = raw[col].ffill()
+
+    metric_rows = raw[raw[metric_col].notna()]
+    if metric_rows.empty:
+        log.warning("No metric rows found in %s after parsing", tsv_path)
+        return []
+
+    def _clean_value(val):
+        if isinstance(val, str):
+            val = val.replace(",", "").strip()
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return val
+
+    long_records: list[dict] = []
+    for _, row in metric_rows.iterrows():
+        metric_name = row[metric_col]
+        for month_col in month_cols:
+            val = row[month_col]
+            # Skip a genuinely missing reading rather than let it through
+            # as (or become) 0 - per an explicit request. pd.isna(val)
+            # catches NaN, which is what pandas' own CSV/TSV parser
+            # normally produces for a blank cell; the extra check for a
+            # literal empty/whitespace-only string is defensive, in case
+            # a blank cell ever survives as "" instead (not observed in a
+            # real file so far, but cheap to guard against).
+            if pd.isna(val) or (isinstance(val, str) and val.strip() == ""):
+                continue
+            long_records.append(
+                {
+                    "Country Name": country,
+                    "Supply Plan Bucket Description": row.get("Supply Plan Bucket Description"),
+                    "L5 - Product": row.get("L5 - Product"),
+                    "DataMeasure": metric_name,
+                    "Date": pd.Period(month_col, freq="M").to_timestamp(),
+                    "Value": _clean_value(val),
+                }
+            )
+    return long_records
+
+
+def parse_mcv_tsv(tsv_path, metric_to_column: dict, country: str) -> pd.DataFrame:
+    """Parse a downloaded Multi-Collab View .tsv into a wide DataFrame with
+    Product/Country/Period columns and one column per metric (via
+    metric_to_column) - the shape the master workbook/schema validation
+    expect. See _parse_mcv_long_records() for the real file structure this
+    is built from. Country is the full name passed in via `country`
+    (confirmed to match a manual reference export), not the ISO code the
+    file's own 'Country ISO Code' column holds.
+    """
+    long_records = _parse_mcv_long_records(tsv_path, country)
+    if not long_records:
+        return pd.DataFrame()
+
+    long_df = pd.DataFrame(long_records)
+    long_df["_column"] = long_df["DataMeasure"].map(
+        lambda m: metric_to_column.get(m, f"raw_{m}")
+    )
+    long_df["Period"] = long_df["Date"].dt.strftime("%Y-%m")
+    wide = long_df.pivot_table(
+        index=["L5 - Product", "Country Name", "Period"],
+        columns="_column",
+        values="Value",
+        aggfunc="first",
+    ).reset_index()
+    wide.columns.name = None
+    return wide.rename(columns={"L5 - Product": "Product", "Country Name": "Country"})
+
+
+def parse_mcv_tsv_long(tsv_path, country: str) -> pd.DataFrame:
+    """Parse a downloaded Multi-Collab View .tsv into LONG format, matching
+    a manually-downloaded reference export exactly: one row per (Country
+    Name, Supply Plan Bucket Description, L5 - Product, DataMeasure,
+    Period, Value) rather than pivoted into metric columns.
+
+    Period is 'YYYY-MM' (not a full date) - matching the source .tsv's own
+    month-bucket column labels directly, per an explicit request, rather
+    than the first-of-month date _parse_mcv_long_records() builds
+    internally for its own bookkeeping.
+
+    Value is never filled in for a missing reading - per an explicit
+    request, rows where the source cell was genuinely blank/NA are
+    dropped, not defaulted to 0. This is already true structurally
+    (_parse_mcv_long_records() skips a NaN cell via `if pd.isna(val):
+    continue` before it's ever added to a record), so the .dropna() below
+    is a no-op in practice - it's kept anyway, explicitly, at the exact
+    point this DataFrame is finalized, so this contract is visible and
+    auditable here rather than relying on a skip several calls away.
+
+    NOTE: a row with Value == 0 is NOT dropped by this - 0 is a genuine
+    reading the source export reported (confirmed: distinct from a blank
+    cell, which never produces a row at all), not a stand-in for missing
+    data. If you specifically want 0-valued readings excluded too, that's
+    a different, additional filter - ask for it explicitly rather than
+    assuming it's covered here, since 0 can be a legitimate data point
+    (e.g. "zero units consumed this month").
+    """
+    long_records = _parse_mcv_long_records(tsv_path, country)
+    if not long_records:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(long_records)
+    df["Period"] = df["Date"].dt.strftime("%Y-%m")
+    df = df.dropna(subset=["Value"])
+    return df[
+        ["Country Name", "Supply Plan Bucket Description", "L5 - Product", "DataMeasure", "Period", "Value"]
+    ]
+
+
+
 def run_download_extraction(
     scraper: GFPVANScraper,
     download_dir: str,
+    country: str,
     max_pages: int | None = None,
     select_all: bool = False,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Full per-page loop using the confirmed real export flow instead of
     DOM-scraping the pivot table: select rows -> open View -> click the
-    download icon -> Export -> read the downloaded .tsv -> back to
+    download icon -> Export -> parse the downloaded .tsv -> back to
     results -> repeat.
 
     select_all=False (default): use select_approved_rows() - only rows
@@ -264,23 +476,28 @@ def run_download_extraction(
     use select_all_rows() instead - every row on the page gets ticked, no
     status filtering.
 
-    Returns the concatenated raw DataFrame straight from pandas' read of
-    each page's .tsv, columns exactly as the portal names them - NOT
-    reshaped or renamed. This is deliberate: the real column names in an
-    actual downloaded export have never been confirmed (see SKILL.md), so
-    forcing a specific shape here would just be another guess. The columns
-    actually present get logged prominently on the first page read - check
-    that log line against config.yaml's metric_to_column /
-    MULTI_COLLAB_SCHEMA and adjust either the schema or add a mapping step
-    here once you've seen a real file, rather than assuming this matches.
+    Returns (wide_df, long_df), both built from the same downloaded .tsv
+    per page without re-fetching anything:
+      - wide_df: Product/Country/Period + one column per metric (via
+        parse_mcv_tsv() and config's metric_to_column) - the shape the
+        master workbook/schema validation expect.
+      - long_df: Country Name/Supply Plan Bucket Description/L5 - Product/
+        DataMeasure/Date/Value - one row per metric reading, matching a
+        manually-downloaded reference export exactly (via
+        parse_mcv_tsv_long()). This is what CSV export uses.
+    `country` (the full name actually searched, e.g. 'Kenya') is used for
+    both - confirmed a manual reference export uses the full name, not
+    the ISO code the .tsv's own 'Country ISO Code' column holds.
     """
     assert scraper.page is not None
+    metric_to_column = scraper.cfg.get("metric_to_column", {})
 
     total = scraper.total_pages()
     if max_pages is not None:
         total = min(total, max_pages)
 
-    all_frames: list[pd.DataFrame] = []
+    all_wide_frames: list[pd.DataFrame] = []
+    all_long_frames: list[pd.DataFrame] = []
     page_num = 1
     logged_columns = False
     while True:
@@ -294,20 +511,20 @@ def run_download_extraction(
             if ticked:
                 if scraper.open_view():
                     tsv_path = scraper.export_results_tsv(download_dir)
-                    page_df = pd.read_csv(tsv_path, sep="\t")
+                    wide_page_df = parse_mcv_tsv(tsv_path, metric_to_column, country)
+                    long_page_df = parse_mcv_tsv_long(tsv_path, country)
                     if not logged_columns:
                         log.info(
-                            "Downloaded export columns (verify against "
-                            "config.yaml's metric_to_column / "
-                            "MULTI_COLLAB_SCHEMA): %s",
-                            list(page_df.columns),
+                            "Parsed export columns: %s",
+                            list(wide_page_df.columns),
                         )
                         logged_columns = True
                     log.info(
                         "Page %d: downloaded %d row(s) from %s",
-                        page_num, len(page_df), tsv_path,
+                        page_num, len(wide_page_df), tsv_path,
                     )
-                    all_frames.append(page_df)
+                    all_wide_frames.append(wide_page_df)
+                    all_long_frames.append(long_page_df)
                     scraper.back_to_results()
                 else:
                     log.warning(
@@ -335,6 +552,6 @@ def run_download_extraction(
             break
         page_num += 1
 
-    if not all_frames:
-        return pd.DataFrame()
-    return pd.concat(all_frames, ignore_index=True)
+    wide_df = pd.concat(all_wide_frames, ignore_index=True) if all_wide_frames else pd.DataFrame()
+    long_df = pd.concat(all_long_frames, ignore_index=True) if all_long_frames else pd.DataFrame()
+    return wide_df, long_df
