@@ -63,7 +63,7 @@ search_scope:
     # - "Malawi"
     # - "Mozambique"
     # - "Zambia"
-    # - "Uganda"
+    - "Uganda"
   l5_products:
     - "Medroxyprogesterone Acetate 104 mg/0.65 mL, Subcutaneous, Pre-Filled Device"
     - "Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular"

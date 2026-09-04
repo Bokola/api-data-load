@@ -937,6 +937,16 @@ class GFPVANScraper:
         product name is authoritative regardless of which visible pane it
         turns up in.
 
+        Types the portion before the first comma as the search query, not
+        the full value - see the comment at search_queries below for why
+        (this widget's delimiter="comma" config) - and falls back to a
+        shorter first-few-words prefix if that finds nothing, to guard
+        against a subtle formatting mismatch between the configured value
+        and the portal's own stored name (confirmed real case: a missing
+        space, "(1mL)" vs the portal's actual "(1 mL)", silently prevented
+        any match at all for one product across many runs before the
+        actual typo was found).
+
         Matching + selecting, confirmed from a captured page: a result
         renders as <li class="eto-results__option" role="option"
         data-value="Kenya" data-text="Kenya"> wrapping <label
@@ -966,58 +976,108 @@ class GFPVANScraper:
                 text_input.click()
             else:
                 raise
-        text_input.fill("")
-        # Type only the portion before the first literal comma, NOT the
-        # full value. Confirmed from a captured page: this input has
-        # delimiter="comma" (replacedelimiter="^^^") configured - every
-        # comma we type gets interpreted as "end this term, start the
-        # next", not as part of one value. Every product name in this
-        # search scope contains commas, and typing them raw produced a
-        # cascade of fragmented, WRONG selections (confirmed: captures
-        # showed things like "Medroxyprogesterone Acetate 104 mg/0.65 mL"
-        # and even a bare " Subcutaneous" selected on their own, split mid-
-        # keystroke, none matching the actual intended product). The
-        # portion before the first comma is still distinct enough to
-        # filter to exactly one match for every value in this list -
-        # verified against config.yaml's actual product/country names.
-        # The FULL original value (with commas) is still what gets matched
-        # exactly against data-value below, and what gets logged/returned -
-        # only the typed query is shortened.
-        search_query = value.split(",")[0].strip()
-        text_input.press_sequentially(search_query, delay=50)
+
+        # Try the full pre-comma substring first, then a shorter first-few-
+        # words prefix as a fallback. Confirmed real case this protects
+        # against: a configured value can have a subtle formatting
+        # difference from the portal's own stored name (e.g. "(1mL)" in
+        # config vs the portal's actual "(1 mL)", a single missing space) -
+        # the full substring then matches NOTHING at all, since the
+        # autocomplete's own search has to find that exact text somewhere
+        # in the real name. A shorter, more generic prefix is far less
+        # likely to be broken by any single formatting quirk buried later
+        # in the string. This doesn't introduce ambiguity for the actual
+        # configured product/country list - a 3-word prefix stays distinct
+        # across every entry - and the exact data-value match below still
+        # decides which suggestion is correct regardless of how broad the
+        # typed query was.
+        search_queries = [value.split(",")[0].strip()]
+        short_query = " ".join(value.split()[:3])
+        if short_query and short_query not in search_queries:
+            search_queries.append(short_query)
 
         safe_value = json.dumps(value)  # CSS-safe quoting for the attribute selector
-
-        wait_ms = self.cfg.get("timeouts.autocomplete_results_ms", 8000)
+        total_wait_ms = self.cfg.get("timeouts.autocomplete_results_ms", 8000)
+        per_query_wait_ms = max(total_wait_ms // len(search_queries), 3000)
         poll_ms = 200
-        elapsed = 0
         option = None
-        while elapsed < wait_ms:
-            panes = self._find_all_visible_panes(search_scope, "eto-results-available")
-            for available_pane in panes:
-                exact = available_pane.locator(
-                    f"li.eto-results__option[data-value={safe_value}]"
-                )
-                if exact.count() > 0:
-                    option = exact.first
-                    break
-            if option is None:
+
+        for query_index, search_query in enumerate(search_queries):
+            text_input.fill("")
+            text_input.press_sequentially(search_query, delay=50)
+
+            elapsed = 0
+            while elapsed < per_query_wait_ms:
+                panes = self._find_all_visible_panes(search_scope, "eto-results-available")
                 for available_pane in panes:
-                    candidates = available_pane.locator(
-                        "[role=option], li, .eto-results__item, a, span"
-                    ).filter(has_text=value)
-                    if candidates.count() > 0:
-                        option = candidates.first
+                    exact = available_pane.locator(
+                        f"li.eto-results__option[data-value={safe_value}]"
+                    )
+                    if exact.count() > 0:
+                        option = exact.first
                         break
+                if option is None:
+                    for available_pane in panes:
+                        candidates = available_pane.locator(
+                            "[role=option], li, .eto-results__item, a, span"
+                        ).filter(has_text=value)
+                        if candidates.count() > 0:
+                            option = candidates.first
+                            break
+                if option is not None:
+                    break
+                self.page.wait_for_timeout(poll_ms)
+                elapsed += poll_ms
+
             if option is not None:
+                if query_index > 0:
+                    log.info(
+                        "Found '%s' only after retrying with a shorter "
+                        "search query ('%s') - the full pre-comma "
+                        "substring ('%s') found nothing, which usually "
+                        "means a formatting mismatch (e.g. a missing "
+                        "space) between the configured value and the "
+                        "portal's own name. Worth double-checking "
+                        "config.yaml's exact spelling for this entry.",
+                        value, search_query, search_queries[0],
+                    )
                 break
-            self.page.wait_for_timeout(poll_ms)
-            elapsed += poll_ms
+
+        # Last resort: neither exact data-value nor broad text matching
+        # found our configured value in ANY query's results - but if the
+        # most specific (shortest, last-tried) query narrowed the visible
+        # suggestions down to EXACTLY ONE, that's still strong evidence
+        # it's the right product, just spelled slightly differently than
+        # configured somewhere (confirmed real case: a missing space
+        # elsewhere in the string means neither match style can ever
+        # succeed, even though the search itself correctly found the one
+        # real suggestion). Only applies when there's no ambiguity - if
+        # more than one suggestion is showing, this does nothing, since
+        # picking one of several would be a real guess, not a confident
+        # fallback.
+        if option is None and search_queries:
+            for available_pane in self._find_all_visible_panes(search_scope, "eto-results-available"):
+                sole_option = available_pane.locator("li.eto-results__option")
+                if sole_option.count() == 1:
+                    option = sole_option.first
+                    log.warning(
+                        "No exact or text match for '%s', but exactly one "
+                        "suggestion was showing after searching '%s' - "
+                        "selecting it as a last resort. This usually means "
+                        "the configured value has a wording/formatting "
+                        "difference from the portal's real name (e.g. a "
+                        "missing space) - worth double-checking "
+                        "config.yaml's exact spelling for this entry.",
+                        value, search_queries[-1],
+                    )
+                    break
 
         if option is None:
             log.warning(
-                "No autocomplete suggestion appeared for '%s' in %s within %dms",
-                value, container_selectors, wait_ms,
+                "No autocomplete suggestion appeared for '%s' in %s within %dms "
+                "(tried %d search quer%s: %s)",
+                value, container_selectors, total_wait_ms, len(search_queries),
+                "y" if len(search_queries) == 1 else "ies", search_queries,
             )
             return False
 
