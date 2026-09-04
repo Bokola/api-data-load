@@ -20,6 +20,7 @@ from .config import Config, ConfigError
 from .extract import upsert_to_excel
 from .landing import stage_raw
 from .logger import enable_file_logging, get_logger
+from . import lakehouse_sync
 from .multi_collab_extract import run_download_extraction, run_multi_collab_extraction
 from .reconciliation import reconcile, write_reconciliation_report
 from .schema_validation import MULTI_COLLAB_SCHEMA, validate_extract
@@ -41,10 +42,31 @@ def _write_country_csv(df: pd.DataFrame, country: str, cfg: Config) -> Path | No
     than accumulating one per run. Set output.csv_datestamp_format in
     config.yaml (a strftime string) to something like "%Y%m%d_%H%M%S" if
     you want a separate file per run instead.
+
+    Drops exact duplicate rows (identical across every column) before
+    writing, per an explicit request. This was investigated but not
+    reproduced against real single-page test data at the time - what WAS
+    found and fixed instead was a real, confirmed bug in
+    total_pages()/goto_next_page() (iframe-blind raw selector calls that
+    silently truncated any multi-page Collaboration Selector result to
+    just page 1), which is a plausible real source of duplicate rows once
+    fixed and re-run against an actual multi-page result set: if a
+    multi-page result had previously been silently stopping after page 1
+    every time, and something about a partial fix or a retry re-processed
+    that same page, the same rows could show up twice across a run. This
+    dedup step is a safety net either way - only removes rows that are
+    100% identical across all columns, never rows that share a key but
+    differ in Value (that's a genuine conflict, not a duplicate, and
+    dropping one arbitrarily would be silent data loss, not cleanup).
     """
     if df.empty:
         log.warning("Not writing a CSV for %s - no rows extracted", country)
         return None
+    before = len(df)
+    df = df.drop_duplicates()
+    removed = before - len(df)
+    if removed:
+        log.info("Removed %d exact duplicate row(s) for %s before writing", removed, country)
     csv_dir = Path(cfg.get("output.csv_dir", "./run_data/csv_exports"))
     csv_dir.mkdir(parents=True, exist_ok=True)
     datestamp_format = cfg.get("output.csv_datestamp_format", "%Y%m%d")
@@ -87,6 +109,8 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
     extraction_method = cfg.get("extraction.method", "download")
 
     per_country_frames: list[pd.DataFrame] = []
+    per_country_long_frames: list[pd.DataFrame] = []
+    written_csv_paths: list[Path] = []
     with open_browser(cfg) as s:
         s.ensure_logged_in()
         s.open_gfpvan()
@@ -144,15 +168,43 @@ def run(cfg: Config, max_pages: int | None = None, baseline_path: Path | None = 
                     # wide-by-metric shape the master workbook uses. Falls
                     # back to the wide df for the "scrape" extraction
                     # method, which doesn't produce a long_df at all.
-                    _write_country_csv(
-                        long_df if not long_df.empty else country_df, country, cfg
-                    )
+                    csv_df = long_df if not long_df.empty else country_df
+                    per_country_long_frames.append(csv_df)
+                    csv_path = _write_country_csv(csv_df, country, cfg)
+                    if csv_path is not None:
+                        written_csv_paths.append(csv_path)
+
+    if per_country_long_frames and cfg.get("output.write_csv", True):
+        # One additional CSV combining every country's long-format data,
+        # per an explicit request - on top of, not instead of, each
+        # country's own CSV above. Reuses _write_country_csv() itself
+        # (passing "All_Countries" as the label instead of a real country
+        # name) rather than duplicating its dedup/naming/logging logic -
+        # produces All_Countries_{datestamp}.csv alongside the per-country
+        # files, using the exact same dedup and datestamp-format rules.
+        combined_long_df = pd.concat(per_country_long_frames, ignore_index=True)
+        combined_csv_path = _write_country_csv(combined_long_df, "All_Countries", cfg)
+        if combined_csv_path is not None:
+            written_csv_paths.append(combined_csv_path)
 
     wide_df = (
         pd.concat(per_country_frames, ignore_index=True)
         if per_country_frames
         else pd.DataFrame()
     )
+
+    if written_csv_paths and cfg.get("output.sync_to_lakehouse", True):
+        # A separate, standalone step - see lakehouse_sync.py - called
+        # here after ALL countries' CSVs are written, not per-country.
+        # Deliberately non-fatal: the local CSVs (and everything else in
+        # this pipeline) have already succeeded by this point, and a
+        # Lakehouse sync failure (e.g. LAKEHOUSE_PATH not set, or the
+        # OneLake File Explorer mount not available on this machine right
+        # now) shouldn't take down an otherwise-successful run.
+        try:
+            lakehouse_sync.sync_to_lakehouse(written_csv_paths)
+        except lakehouse_sync.LakehouseSyncError as e:
+            log.warning("Lakehouse sync skipped: %s", e)
 
     landing_path = stage_raw(
         wide_df.to_dict("records") if not wide_df.empty else [], cfg

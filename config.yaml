@@ -59,16 +59,16 @@ approved_statuses:
 search_scope:
   countries:
     - "Kenya"
-    - "Nigeria"
-    - "Malawi"
-    - "Mozambique"
-    - "Zambia"
+    # - "Nigeria"
+    # - "Malawi"
+    # - "Mozambique"
+    # - "Zambia"
     - "Uganda"
   l5_products:
     - "Medroxyprogesterone Acetate 104 mg/0.65 mL, Subcutaneous, Pre-Filled Device"
     - "Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial, Intramuscular"
     - "Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule, Intramuscular"
-    - "Norethisterone Enantate 200 mg/mL (1mL) Ampoule, Intramuscular"
+    - "Norethisterone Enantate 200 mg/mL (1 mL) Ampoule, Intramuscular"
 
 # Pagination + timing
 timeouts:

@@ -20,8 +20,11 @@ never as a standalone script.
 
 ```bash
 # 1. Create the venv and install everything from pyproject.toml
-uv venv
+uv venv 
 uv sync
+
+# if cloned from a git repo
+ uv sync # after you cd to that dir
 
 # 2. Install the actual browser binary Playwright drives
 uv run playwright install chromium
@@ -46,6 +49,10 @@ uv run python -m gfpvan_pipeline.main
 
 # Cap how many result pages to process per country (useful while testing selectors)
 uv run python -m gfpvan_pipeline.main --max-pages 1
+
+# full run
+
+uv run python -m gfpvan_pipeline.main
 
 # Reconcile against a manually-downloaded baseline file
 uv run python -m gfpvan_pipeline.main --baseline path/to/manual_download.xlsx
