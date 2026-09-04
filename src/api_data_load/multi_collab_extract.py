@@ -344,8 +344,23 @@ def _parse_mcv_long_records(tsv_path, country: str) -> list[dict]:
     metric_col = max(unnamed_before_months, key=lambda c: raw[c].notna().sum())
 
     # Static attributes are only populated on each block's master row -
-    # forward-fill them down through that block's metric rows.
-    for col in ("Country ISO Code", "Supply Plan Bucket Description", "L5 - Product"):
+    # forward-fill them down through that block's metric rows. Confirmed
+    # real columns in the raw file (from an actual header row): both
+    # Review Status fields are here alongside Country ISO Code/Supply Plan
+    # Bucket Description/L5 - Product - "Review Status - Supply Plan" was
+    # previously dropped even though it was already present in every
+    # downloaded file, simply because nothing asked for it. Other static
+    # attributes also exist in the same block (Membership Type, MOS
+    # thresholds, Assigned Analyst, upload schedules, S1-/S2- fields) and
+    # aren't included here - add them the same way if/when they're wanted.
+    static_attribute_cols = (
+        "Country ISO Code",
+        "Supply Plan Bucket Description",
+        "L5 - Product",
+        "Review Status - Inventory",
+        "Review Status - Supply Plan",
+    )
+    for col in static_attribute_cols:
         if col in raw.columns:
             raw[col] = raw[col].ffill()
 
@@ -381,6 +396,8 @@ def _parse_mcv_long_records(tsv_path, country: str) -> list[dict]:
                     "Country Name": country,
                     "Supply Plan Bucket Description": row.get("Supply Plan Bucket Description"),
                     "L5 - Product": row.get("L5 - Product"),
+                    "Review Status - Inventory": row.get("Review Status - Inventory"),
+                    "Review Status - Supply Plan": row.get("Review Status - Supply Plan"),
                     "DataMeasure": metric_name,
                     "Date": pd.Period(month_col, freq="M").to_timestamp(),
                     "Value": _clean_value(val),
@@ -420,8 +437,37 @@ def parse_mcv_tsv(tsv_path, metric_to_column: dict, country: str) -> pd.DataFram
 def parse_mcv_tsv_long(tsv_path, country: str) -> pd.DataFrame:
     """Parse a downloaded Multi-Collab View .tsv into LONG format, matching
     a manually-downloaded reference export exactly: one row per (Country
-    Name, Supply Plan Bucket Description, L5 - Product, DataMeasure,
-    Period, Value) rather than pivoted into metric columns.
+    Name, Supply Plan Bucket Description, L5 - Product,
+    Review Status - Inventory, Review Status - Supply Plan, DataMeasure,
+    Scenario, Period, Value) rather than pivoted into metric columns.
+
+    Both Review Status columns were confirmed missing from an earlier
+    version - they're static "Details" attributes exactly like Country
+    Name/Supply Plan Bucket Description/L5 - Product (all live in the
+    same "Details" block, confirmed from a real captured page), and were
+    already present in every downloaded file - just never carried through
+    parsing. A manually-downloaded reference export that included
+    Review Status - Supply Plan (but not Supply Plan Bucket Description -
+    different reference exports include different subsets of the
+    available Details attributes, apparently based on what's visible in
+    the portal at export time) is what surfaced the gap.
+
+    Scenario ('Base', 'S1', or 'S2') is split out of DataMeasure rather
+    than the 'S1 - '/'S2 - ' prefix simply being deleted, per an explicit
+    request to have DataMeasure be exact/unprefixed. Confirmed against
+    real data why a plain strip isn't safe here: 'S1 - Monthly
+    Consumption' and 'S2 - Monthly Consumption' are DIFFERENT readings
+    from the same-named base metric 'Monthly Consumption', not
+    duplicates or a formatting variant of it - e.g. one real product's
+    August 2026 Projected Inventory reads 1,471,038 for the base scenario
+    but 159,038 for S1 and S2, a ~10x difference. Deleting the prefix
+    outright would make three genuinely different numbers appear under
+    the identical label 'Projected Inventory' for the same product and
+    period, with no way to tell them apart afterward - confirmed this
+    would affect 813 of 1,315 rows in a real file, 98 of which have
+    values that actually differ between scenarios (not just duplicate-
+    looking rows). Splitting into a separate column keeps DataMeasure
+    clean while keeping the distinction available, not silently gone.
 
     Period is 'YYYY-MM' (not a full date) - matching the source .tsv's own
     month-bucket column labels directly, per an explicit request, rather
@@ -452,8 +498,23 @@ def parse_mcv_tsv_long(tsv_path, country: str) -> pd.DataFrame:
     df = pd.DataFrame(long_records)
     df["Period"] = df["Date"].dt.strftime("%Y-%m")
     df = df.dropna(subset=["Value"])
+
+    scenario_match = df["DataMeasure"].str.extract(r"^(S[12]) - (.+)$")
+    df["Scenario"] = scenario_match[0].fillna("Base")
+    df["DataMeasure"] = scenario_match[1].fillna(df["DataMeasure"])
+
     return df[
-        ["Country Name", "Supply Plan Bucket Description", "L5 - Product", "DataMeasure", "Period", "Value"]
+        [
+            "Country Name",
+            "Supply Plan Bucket Description",
+            "L5 - Product",
+            "Review Status - Inventory",
+            "Review Status - Supply Plan",
+            "DataMeasure",
+            "Scenario",
+            "Period",
+            "Value",
+        ]
     ]
 
 

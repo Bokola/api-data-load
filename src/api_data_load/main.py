@@ -41,10 +41,31 @@ def _write_country_csv(df: pd.DataFrame, country: str, cfg: Config) -> Path | No
     than accumulating one per run. Set output.csv_datestamp_format in
     config.yaml (a strftime string) to something like "%Y%m%d_%H%M%S" if
     you want a separate file per run instead.
+
+    Drops exact duplicate rows (identical across every column) before
+    writing, per an explicit request. This was investigated but not
+    reproduced against real single-page test data at the time - what WAS
+    found and fixed instead was a real, confirmed bug in
+    total_pages()/goto_next_page() (iframe-blind raw selector calls that
+    silently truncated any multi-page Collaboration Selector result to
+    just page 1), which is a plausible real source of duplicate rows once
+    fixed and re-run against an actual multi-page result set: if a
+    multi-page result had previously been silently stopping after page 1
+    every time, and something about a partial fix or a retry re-processed
+    that same page, the same rows could show up twice across a run. This
+    dedup step is a safety net either way - only removes rows that are
+    100% identical across all columns, never rows that share a key but
+    differ in Value (that's a genuine conflict, not a duplicate, and
+    dropping one arbitrarily would be silent data loss, not cleanup).
     """
     if df.empty:
         log.warning("Not writing a CSV for %s - no rows extracted", country)
         return None
+    before = len(df)
+    df = df.drop_duplicates()
+    removed = before - len(df)
+    if removed:
+        log.info("Removed %d exact duplicate row(s) for %s before writing", removed, country)
     csv_dir = Path(cfg.get("output.csv_dir", "./run_data/csv_exports"))
     csv_dir.mkdir(parents=True, exist_ok=True)
     datestamp_format = cfg.get("output.csv_datestamp_format", "%Y%m%d")

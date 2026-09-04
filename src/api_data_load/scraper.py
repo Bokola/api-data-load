@@ -1349,10 +1349,21 @@ class GFPVANScraper:
 
     # ---------------------------------------------------------------- pagination helpers
     def total_pages(self) -> int:
-        """Read 'Page X of Y' indicator. Returns 1 if not found."""
+        """Read 'Page X of Y' indicator. Returns 1 if not found.
+
+        Uses _get_grid_frame(), not a raw self.page.locator(...) - same
+        reasoning as goto_next_page(). Confirmed real bug: with a raw
+        self.page.locator(...) call here, this NEVER finds the real page
+        indicator (it lives inside the results grid's iframe), so it
+        always silently returned the 1-page fallback - meaning any
+        multi-page Collaboration Selector result set was truncated to
+        just page 1, with every later page's rows never even attempted,
+        not just mishandled once reached.
+        """
         assert self.page is not None
+        grid = self._get_grid_frame()
         for sel in self.cfg.selectors("results.page_indicator"):
-            loc = self.page.locator(sel).first
+            loc = grid.locator(sel).first
             if loc.count() > 0:
                 txt = loc.inner_text()
                 # "Page 1 of 2 ; 43 Records"
@@ -1363,10 +1374,20 @@ class GFPVANScraper:
 
     def goto_next_page(self) -> bool:
         """Click 'next page'. Returns False if no candidate resolves to an
-        enabled control."""
+        enabled control.
+
+        Uses _get_grid_frame(), not a raw self.page.locator(...) - the
+        results grid (and its pagination controls) always lives inside an
+        iframe, confirmed repeatedly elsewhere in this class. A raw
+        self.page.locator(...) call here would never find the real "next
+        page" button, silently making every multi-page result set behave
+        as if it only had one page - the same bug class documented on
+        _get_grid_frame() and select_approved_rows()/select_all_rows().
+        """
         assert self.page is not None
+        grid = self._get_grid_frame()
         for sel in self.cfg.selectors("results.next_page_button"):
-            loc = self.page.locator(sel).first
+            loc = grid.locator(sel).first
             if loc.count() == 0:
                 continue
             if not loc.is_enabled():
