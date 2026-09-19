@@ -1,0 +1,1276 @@
+<!DOCTYPE html><html><head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<title>E2open</title>
+<link rel="stylesheet" type="text/css" data-hook="stylesheet-toggle" href="./css/edl.min.css?cacheProperty=gfpvan2536-en">
+<script language="javascript" type="text/javascript" src="./js/util/RcpTop.js?cacheProperty=gfpvan2536-en"></script>
+
+<script language="javascript" type="text/javascript" src="./js/util/Common.jsp?cacheProperty=gfpvan2536-en"></script>
+
+<script language="javascript" type="text/javascript" src="./js/bower_components/jquery/dist/jquery.min.js?cacheProperty=gfpvan2536-en"></script>
+
+<script language="javascript" type="text/javascript" src="./js/bower_components/iframe-resizer/js/iframeResizer.min.js?cacheProperty=gfpvan2536-en"></script>
+
+<script language="javascript" type="text/javascript" src="js/util/MCVCommon.jsp?cacheProperty=gfpvan2536-en"></script>
+
+<script language="javascript" type="text/javascript" src="./js/util/e2LocalStorage.js?cacheProperty=gfpvan2536-en"></script>
+
+
+<script language="JavaScript" type="text/javascript">
+var isSingle = "mcv" != 'splitMCV';
+var resizeTimerId = '';
+function init() {
+  if(!isSingle) {
+    rcptop.showStickySection();
+    submitForm(document.upperSectionForm);
+  }
+  submitForm(document.lowerSectionForm);
+}
+
+function updateCtx(frame1Size, frame2Size) {
+  if(!frame1Size)
+    frame1Size = '';
+  if(!frame2Size)
+    frame2Size = '';
+  document.splitMCVForm.elements['UpperSection.frameSize'].value = frame1Size;
+  document.splitMCVForm.elements['LowerSection.frameSize'].value = frame2Size;
+  rcptop.currentContext.addItem("CTX:UpperSection.frameSize", document.splitMCVForm.elements['UpperSection.frameSize'].value);
+  rcptop.currentContext.addItem("CTX:LowerSection.frameSize", document.splitMCVForm.elements['LowerSection.frameSize'].value);
+}
+
+function submitForm(formToSubmit) {
+  formToSubmit.submit();
+  return false;
+}
+
+function refresh(startDate, endDate, calendar, excludeComponent) {
+  if(!(excludeComponent && excludeComponent.startsWith('UpperSection'))) {
+    var upperSectionFrame = parent.document.getElementById('sticky-frame').contentWindow;//findUpperFrameContent();
+    if(upperSectionFrame && upperSectionFrame.refreshSection) {
+      if(!isSingle) {
+        frameUloaded = false;
+      }
+      upperSectionFrame.refreshSection(startDate, endDate, calendar);
+    }
+  }
+  if(!(excludeComponent && excludeComponent.startsWith('LowerSection'))) {
+    var lowerSectionFrame = document.getElementById('LowerSectionFrame');
+    frameLloaded = false;
+    lowerSectionFrame.contentWindow.refreshSection(startDate, endDate, calendar);
+  }
+}
+
+function exportPage() {
+  var upperSectionFrame = findUpperFrameContent();
+  var lowerSectionFrame = document.getElementById('LowerSectionFrame');
+
+  var upperSectionFile = upperSectionFrame.exportSection();
+  var lowerSectionFile = lowerSectionFrame.contentWindow.exportSection();
+
+  var file = '';
+  if(upperSectionFile) {
+    if(upperSectionFile.length > 0) {
+      file += upperSectionFile;
+      file += '\n';
+    }
+  }
+  if(lowerSectionFile) {
+    if(lowerSectionFile.length > 0)
+      file += lowerSectionFile;
+  }
+  saveTableText(file, 'SplitMCV.tsv');
+}
+
+var syncScrollSource = '';
+var upperscrollLeft = 0;
+var lowerscrollLeft = 0;
+
+</script>
+</head>
+
+<body density="comfortable" onload="init();" style="min-height: 100%;">
+<script language="JavaScript" type="text/javascript">
+  showTopLoader();
+</script>
+<!--
+  Copyright (c) 2014 E2open, Inc.
+  All Rights Reserved.
+ 
+  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF E2open
+  The copyright notice above does not evidence any
+  actual or intended publication of such source code.
+-->
+
+
+
+<!--
+  Copyright (c) 2014 E2open, Inc.
+  All Rights Reserved.
+ 
+  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF E2open
+  The copyright notice above does not evidence any
+  actual or intended publication of such source code.
+-->
+
+
+<script language="JavaScript" type="text/javascript">
+  rcptop.getWFM().setWFFilter('procFcstVMISearch','target');
+</script>
+
+
+<script language="JavaScript" type="text/javascript">
+  
+  var newContext = rcptop.ctxTree.getContextString("rcp_content", null, false, false);
+  rcptop.getWFM().resetContextTree(newContext);
+</script>
+
+<iframe id="LowerSectionFrame" name="LowerSectionFrame" src="blank.html" style="border-style: hidden; overflow: hidden; height: 0px;" framespacing="0px" width="100%" height="45%" marginheight="0px" marginwidth="0px" frameborder="0px" scrolling="no"></iframe>
+<script>
+jQuery('#LowerSectionFrame').iFrameResize({heightCalculationMethod:'taggedElement'});
+</script>
+<form name="splitMCVForm" id="splitMCVForm" method="POST" action="mcvController.do?1=1">
+
+<input type="hidden" name="DefaultURL" value="mcvController.do?wf=procFcstVMISearch&amp;wff=target&amp;CTX:applicationId=null&amp;PopupMenu=collabAttribute,CollabAttrAudit&amp;ClbAttrTabs=procFcstVMISearch_Collab&amp;AllowableChains=&amp;ViewVariants=GENERIC_AGG_VIEW|Supply_Plan[Forecast,PrevForecast,InventoryCustSite,SupplyPlanInventory,ProjectedInventoryAdjustment,ExpectedRequirements,ForecastUI,PrevForecastUI,SupplyPlanInventoryUI,InventoryCustSiteUI,ActualInventory,ProjectedInventoryAdjustmentUI,ExpectedRequirementsUI,InProcessRequisitions,UnOrderedRequisitions,UnShippedOrders,SchedUnRefShipments,InTransitShipments,DeliveredShipments,ReceivedShipments,ManualAdjustment,ProjectedInventory,ProjectedDOS,ProjectedMOSMin,ProjectedMOSMax,ActionRequestTickets,DataValidationTickets,SuggestedReplenishment,ProjectedDOSRepl,ForecastS1,ProjectedSuppliesS1,ProjectedInventoryS1,ProjectedDOSS1,SuggestedReplenishmentS1,ProjectedDOSReplS1,ForecastS2,ProjectedSuppliesS2,ProjectedInventoryS2,ProjectedDOSS2,SuggestedReplenishmentS2,ProjectedDOSReplS2,InventoryCustSiteAlert,ForecastAlert]&amp;DrawChart=GENERIC_AGG_VIEW,GENERIC_AGG_VIEW|Supply_Plan[Forecast(type%3Dcolumn),PrevForecast(type%3Dcolumn),SupplyPlanInventory(type%3Dcolumn),InventoryCustSite(type%3Dcolumn),ManualAdjustment(type%3Dcolumn),ActualInventory(type%3Dcolumn),ProjectedInventoryAdjustment(type%3Dcolumn),ExpectedRequirements(type%3Dcolumn),InTransitShipments(type%3Dcolumn),UnShippedOrders(type%3Dcolumn),SchedUnRefShipments(type%3Dcolumn),DeliveredShipments(type%3Dcolumn),ReceivedShipments(type%3Dcolumn),ProjectedInventory(type%3Dcolumn),ProjectedDOS(type%3Dcolumn),ProjectedInventoryNegative(type%3Dcolumn),SuggestedReplenishment(type%3Dcolumn),ProjectedDOSRepl(type%3Dcolumn),ForecastS1(type%3Dcolumn),ProjectedSuppliesS1(type%3Dcolumn),ProjectedInventoryS1(type%3Dcolumn),ProjectedDOSS1(type%3Dcolumn),ProjectedInventoryNegativeS1(type%3Dcolumn),SuggestedReplenishmentS1(type%3Dcolumn),ProjectedDOSReplS1(type%3Dcolumn),ForecastS2(type%3Dcolumn),ProjectedSuppliesS2(type%3Dcolumn),ProjectedInventoryS2(type%3Dcolumn),ProjectedDOSS2(type%3Dcolumn),ProjectedInventoryNegativeS2(type%3Dcolumn),SuggestedReplenishmentS2(type%3Dcolumn),ProjectedDOSReplS2(type%3Dcolumn),ForecastUI(type%3Dcolumn),PrevForecastUI(type%3Dcolumn),SupplyPlanInventoryUI(type%3Dcolumn),InventoryCustSiteUI(type%3Dcolumn),ProjectedInventoryAdjustmentUI(type%3Dcolumn),ExpectedRequirementsUI(type%3Dcolumn),DataValidationTickets(type%3Dcolumn),ActionRequestTickets(type%3Dcolumn),InProcessRequisitions(type%3Dcolumn),UnOrderedRequisitions(type%3Dcolumn)]&amp;AllowableTabs=detail&amp;AllowableTabs=detail&amp;PSDSelector=procFcstVMICollabSearch,CimPsd&amp;CollabListPsdSelector=procFcstVMICollabSearch,CimPsd&amp;PitPSDSelector=procFcstVMICollabSearch,CimPsd&amp;RelativeStartDays=-6m&amp;RelativeEndDays=24m&amp;Mcv.BulkIoButtons=Download[DocTypes%3DPurchasedItemsInventoryUIPITConfigSsDownload]&amp;OcCreateButtons=button3[wf%3DticketCreateFromMCVHidden|wff%3DticketCreateFromMCVFilter|model%3DReceipt|modelSubType%3DTicket|action%3DUI_CreateTicket]^button4[wf%3DRequestCreateFromMCVHidden|wff%3DRequestCreateFromMCVFilter|model%3DReceipt|modelSubType%3DRequest|action%3DUI_CreateRequest]^button5[wf%3DRequestCreateFromMCVHiddenCPL|wff%3DRequestCreateFromMCVCPLFilter|model%3DReceipt|modelSubType%3DRequest|action%3DUI_CreateRequest_CPL]&amp;MESSAGE=&amp;VIEW_TYPE=ppff&amp;FILTER_CRITERIA=COLLAB_ATTRSupplierItemID[PHANTOM]^COLLAB_ATTRCollabSolutionType[Purchased]^customer[core.web.EntityFilterSpec.entityDescFilter: Kenya]^custitem[core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate 200 mg/mL (1 mL) Ampoule%5C, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule%5C, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial%5C, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 104 mg/0.65 mL%5C, Subcutaneous%5C, Pre-Filled Device]^CollabGroupName[Default_TimeLine]^&amp;OPTIONAL_FILTERS=&amp;COLLAB_IDS=1382|1383|1384|1385|1363|1364|1365|1366&amp;EXCLUDED_IDS=&amp;VARIANT_NAME=GENERIC_AGG_VIEW|Supply_Plan&amp;SummaryVariant=&amp;BUCKET_PATTERNS=&amp;SKIP_PATTERN=&amp;DM_NAMES=&amp;CAL_VIEW=&amp;START_DATE=&amp;END_DATE=&amp;FROM_PAGE=&amp;CURRENT_TAB=detail&amp;PREVIOUS_VIEW_CIDS=&amp;DisplayCols=&amp;SortCols=&amp;SortDir=&amp;BandColumn=&amp;START_INDEX=&amp;CurrentPageNo=&amp;FORWARDED_COLLAB_IDS=&amp;groupByClause=&amp;severities=&amp;collabAttrs=&amp;useFilter=&amp;PROBLEM_DM=&amp;PROBLEM_FC=&amp;probCount=&amp;problemType=&amp;COLLAB_TYPE=&amp;HideProblemView=&amp;FILTER_COLLAB_IDS=&amp;ShowChart=&amp;ToggledCollab=&amp;SummaryToggledRollup=&amp;filter_constraint=&amp;BpmCreateErrorIds=&amp;HasTab=1" style="">
+
+
+<input type="hidden" name="wf" value="procFcstVMISearch" style="">
+
+<input type="hidden" name="wff" value="target" style="">
+
+<input type="hidden" name="CTX:applicationId" value="null" style="">
+
+<input type="hidden" name="PopupMenu" value="collabAttribute,CollabAttrAudit" style="">
+
+<input type="hidden" name="ClbAttrTabs" value="procFcstVMISearch_Collab" style="">
+
+<input type="hidden" name="AllowableChains" value="" style="">
+
+<input type="hidden" name="ViewVariants" value="GENERIC_AGG_VIEW|Supply_Plan[Forecast,PrevForecast,InventoryCustSite,SupplyPlanInventory,ProjectedInventoryAdjustment,ExpectedRequirements,ForecastUI,PrevForecastUI,SupplyPlanInventoryUI,InventoryCustSiteUI,ActualInventory,ProjectedInventoryAdjustmentUI,ExpectedRequirementsUI,InProcessRequisitions,UnOrderedRequisitions,UnShippedOrders,SchedUnRefShipments,InTransitShipments,DeliveredShipments,ReceivedShipments,ManualAdjustment,ProjectedInventory,ProjectedDOS,ProjectedMOSMin,ProjectedMOSMax,ActionRequestTickets,DataValidationTickets,SuggestedReplenishment,ProjectedDOSRepl,ForecastS1,ProjectedSuppliesS1,ProjectedInventoryS1,ProjectedDOSS1,SuggestedReplenishmentS1,ProjectedDOSReplS1,ForecastS2,ProjectedSuppliesS2,ProjectedInventoryS2,ProjectedDOSS2,SuggestedReplenishmentS2,ProjectedDOSReplS2,InventoryCustSiteAlert,ForecastAlert]" style="">
+
+<input type="hidden" name="DrawChart" value="GENERIC_AGG_VIEW,GENERIC_AGG_VIEW|Supply_Plan[Forecast(type=column),PrevForecast(type=column),SupplyPlanInventory(type=column),InventoryCustSite(type=column),ManualAdjustment(type=column),ActualInventory(type=column),ProjectedInventoryAdjustment(type=column),ExpectedRequirements(type=column),InTransitShipments(type=column),UnShippedOrders(type=column),SchedUnRefShipments(type=column),DeliveredShipments(type=column),ReceivedShipments(type=column),ProjectedInventory(type=column),ProjectedDOS(type=column),ProjectedInventoryNegative(type=column),SuggestedReplenishment(type=column),ProjectedDOSRepl(type=column),ForecastS1(type=column),ProjectedSuppliesS1(type=column),ProjectedInventoryS1(type=column),ProjectedDOSS1(type=column),ProjectedInventoryNegativeS1(type=column),SuggestedReplenishmentS1(type=column),ProjectedDOSReplS1(type=column),ForecastS2(type=column),ProjectedSuppliesS2(type=column),ProjectedInventoryS2(type=column),ProjectedDOSS2(type=column),ProjectedInventoryNegativeS2(type=column),SuggestedReplenishmentS2(type=column),ProjectedDOSReplS2(type=column),ForecastUI(type=column),PrevForecastUI(type=column),SupplyPlanInventoryUI(type=column),InventoryCustSiteUI(type=column),ProjectedInventoryAdjustmentUI(type=column),ExpectedRequirementsUI(type=column),DataValidationTickets(type=column),ActionRequestTickets(type=column),InProcessRequisitions(type=column),UnOrderedRequisitions(type=column)]" style="">
+
+<input type="hidden" name="AllowableTabs" value="detail" style="">
+
+<input type="hidden" name="AllowableTabs" value="detail" style="">
+
+<input type="hidden" name="PSDSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+<input type="hidden" name="CollabListPsdSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+<input type="hidden" name="PitPSDSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+<input type="hidden" name="RelativeStartDays" value="-6m" style="">
+
+<input type="hidden" name="RelativeEndDays" value="24m" style="">
+
+<input type="hidden" name="Mcv.BulkIoButtons" value="Download[DocTypes=PurchasedItemsInventoryUIPITConfigSsDownload]" style="">
+
+<input type="hidden" name="OcCreateButtons" value="button3[wf=ticketCreateFromMCVHidden|wff=ticketCreateFromMCVFilter|model=Receipt|modelSubType=Ticket|action=UI_CreateTicket]^button4[wf=RequestCreateFromMCVHidden|wff=RequestCreateFromMCVFilter|model=Receipt|modelSubType=Request|action=UI_CreateRequest]^button5[wf=RequestCreateFromMCVHiddenCPL|wff=RequestCreateFromMCVCPLFilter|model=Receipt|modelSubType=Request|action=UI_CreateRequest_CPL]" style="">
+
+<input type="hidden" name="MESSAGE" value="" style="">
+
+<input type="hidden" name="VIEW_TYPE" value="ppff" style="">
+
+<input type="hidden" name="FILTER_CRITERIA" value="COLLAB_ATTRSupplierItemID[PHANTOM]^COLLAB_ATTRCollabSolutionType[Purchased]^customer[core.web.EntityFilterSpec.entityDescFilter: Kenya]^custitem[core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate 200 mg/mL (1 mL) Ampoule\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 104 mg/0.65 mL\, Subcutaneous\, Pre-Filled Device]^CollabGroupName[Default_TimeLine]^" style="">
+
+<input type="hidden" name="OPTIONAL_FILTERS" value="" style="">
+
+<input type="hidden" name="COLLAB_IDS" value="1382|1383|1384|1385|1363|1364|1365|1366" style="">
+
+<input type="hidden" name="EXCLUDED_IDS" value="" style="">
+
+<input type="hidden" name="VARIANT_NAME" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+<input type="hidden" name="SummaryVariant" value="" style="">
+
+<input type="hidden" name="BUCKET_PATTERNS" value="" style="">
+
+<input type="hidden" name="SKIP_PATTERN" value="" style="">
+
+<input type="hidden" name="DM_NAMES" value="" style="">
+
+<input type="hidden" name="CAL_VIEW" value="" style="">
+
+<input type="hidden" name="START_DATE" value="" style="">
+
+<input type="hidden" name="END_DATE" value="" style="">
+
+<input type="hidden" name="FROM_PAGE" value="" style="">
+
+<input type="hidden" name="CURRENT_TAB" value="detail" style="">
+
+<input type="hidden" name="PREVIOUS_VIEW_CIDS" value="" style="">
+
+<input type="hidden" name="DisplayCols" value="" style="">
+
+<input type="hidden" name="SortCols" value="" style="">
+
+<input type="hidden" name="SortDir" value="" style="">
+
+<input type="hidden" name="BandColumn" value="" style="">
+
+<input type="hidden" name="START_INDEX" value="" style="">
+
+<input type="hidden" name="CurrentPageNo" value="" style="">
+
+<input type="hidden" name="FORWARDED_COLLAB_IDS" value="" style="">
+
+<input type="hidden" name="groupByClause" value="" style="">
+
+<input type="hidden" name="severities" value="" style="">
+
+<input type="hidden" name="collabAttrs" value="" style="">
+
+<input type="hidden" name="useFilter" value="" style="">
+
+<input type="hidden" name="PROBLEM_DM" value="" style="">
+
+<input type="hidden" name="PROBLEM_FC" value="" style="">
+
+<input type="hidden" name="probCount" value="" style="">
+
+<input type="hidden" name="problemType" value="" style="">
+
+<input type="hidden" name="COLLAB_TYPE" value="" style="">
+
+<input type="hidden" name="HideProblemView" value="" style="">
+
+<input type="hidden" name="FILTER_COLLAB_IDS" value="" style="">
+
+<input type="hidden" name="ShowChart" value="" style="">
+
+<input type="hidden" name="ToggledCollab" value="" style="">
+
+<input type="hidden" name="SummaryToggledRollup" value="" style="">
+
+<input type="hidden" name="filter_constraint" value="" style="">
+
+<input type="hidden" name="BpmCreateErrorIds" value="" style="">
+
+<input type="hidden" name="HasTab" value="1" style="">
+
+<input type="hidden" name="UpperSection.frameSize" value="" style="">
+<input type="hidden" name="LowerSection.frameSize" value="" style="">
+</form>
+<form name="upperSectionForm" id="upperSectionForm" method="POST" target="sticky_frame" action="mcvSummaryComponent.do?Section=UpperSection&amp;">
+
+  <input type="hidden" name="SummaryVariant" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+  <input type="hidden" name="filter_constraint" value="" style="">
+
+  <input type="hidden" name="ComponentType" value="Summary" style="">
+
+  <input type="hidden" name="SummarySelector" value="Summary" style="">
+
+  <input type="hidden" name="EndDate" value="" style="">
+
+  <input type="hidden" name="wf" value="procFcstVMISearch" style="">
+
+  <input type="hidden" name="StartDate" value="" style="">
+
+  <input type="hidden" name="AllowableTabs" value="detail" style="">
+
+  <input type="hidden" name="HasTab" value="1" style="">
+
+  <input type="hidden" name="CURRENT_TAB" value="detail" style="">
+
+  <input type="hidden" name="ViewVariant" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+  <input type="hidden" name="ShowPageExport" value="true" style="">
+
+  <input type="hidden" name="wff" value="target" style="">
+
+  <input type="hidden" name="CollabIds" value="1382|1383|1384|1385|1363|1364|1365|1366|" style="">
+
+</form>
+<form name="lowerSectionForm" id="lowerSectionForm" method="POST" target="LowerSectionFrame" action="mcvComponent.do?Section=LowerSection&amp;">
+
+    <input type="hidden" name="HideProblemView" value="" style="">
+
+    <input type="hidden" name="CollabListPsdSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+    <input type="hidden" name="END_DATE" value="" style="">
+
+    <input type="hidden" name="COLLAB_TYPE" value="" style="">
+
+    <input type="hidden" name="FilterCriteria" value="COLLAB_ATTRSupplierItemID[PHANTOM]^COLLAB_ATTRCollabSolutionType[Purchased]^customer[core.web.EntityFilterSpec.entityDescFilter: Kenya]^custitem[core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate 200 mg/mL (1 mL) Ampoule\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Norethisterone Enantate/Estradiol Valerate 50/5 mg/mL (1 mL) Ampoule\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 150 mg/mL (1 mL) Vial\, Intramuscular|core.web.EntityFilterSpec.entityDescFilter: Medroxyprogesterone Acetate 104 mg/0.65 mL\, Subcutaneous\, Pre-Filled Device]^CollabGroupName[Default_TimeLine]^" style="">
+
+    <input type="hidden" name="VIEW_TYPE" value="ppff" style="">
+
+    <input type="hidden" name="type" value="mcv" style="">
+
+    <input type="hidden" name="ProblemDM" value="" style="">
+
+    <input type="hidden" name="StartDate" value="" style="">
+
+    <input type="hidden" name="SKIP_PATTERN" value="" style="">
+
+    <input type="hidden" name="BucketPattern" value="" style="">
+
+    <input type="hidden" name="probCount" value="" style="">
+
+    <input type="hidden" name="groupByClause" value="" style="">
+
+    <input type="hidden" name="Mcv.BulkIoButtons" value="Download[DocTypes=PurchasedItemsInventoryUIPITConfigSsDownload]" style="">
+
+    <input type="hidden" name="PREVIOUS_VIEW_CIDS" value="" style="">
+
+    <input type="hidden" name="RelativeEndDays" value="24m" style="">
+
+    <input type="hidden" name="PitPSDSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+    <input type="hidden" name="COLLAB_IDS" value="1382|1383|1384|1385|1363|1364|1365|1366" style="">
+
+    <input type="hidden" name="DisplayCols" value="" style="">
+
+    <input type="hidden" name="PROBLEM_FC" value="" style="">
+
+    <input type="hidden" name="FORWARDED_COLLAB_IDS" value="" style="">
+
+    <input type="hidden" name="ShowChart" value="" style="">
+
+    <input type="hidden" name="SummaryToggledRollup" value="" style="">
+
+    <input type="hidden" name="SortCols" value="" style="">
+
+    <input type="hidden" name="OcCreateButtons" value="button3[wf=ticketCreateFromMCVHidden|wff=ticketCreateFromMCVFilter|model=Receipt|modelSubType=Ticket|action=UI_CreateTicket]^button4[wf=RequestCreateFromMCVHidden|wff=RequestCreateFromMCVFilter|model=Receipt|modelSubType=Request|action=UI_CreateRequest]^button5[wf=RequestCreateFromMCVHiddenCPL|wff=RequestCreateFromMCVCPLFilter|model=Receipt|modelSubType=Request|action=UI_CreateRequest_CPL]" style="">
+
+    <input type="hidden" name="CURRENT_TAB" value="detail" style="">
+
+    <input type="hidden" name="CollabIds" value="1382|1383|1384|1385|1363|1364|1365|1366|" style="">
+
+    <input type="hidden" name="BandColumn" value="" style="">
+
+    <input type="hidden" name="problemType" value="" style="">
+
+    <input type="hidden" name="EXCLUDED_IDS" value="" style="">
+
+    <input type="hidden" name="PopupMenu" value="collabAttribute,CollabAttrAudit" style="">
+
+    <input type="hidden" name="ClbAttrTabs" value="procFcstVMISearch_Collab" style="">
+
+    <input type="hidden" name="SummaryVariant" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+    <input type="hidden" name="FILTER_COLLAB_IDS" value="" style="">
+
+    <input type="hidden" name="ToggledCollab" value="" style="">
+
+    <input type="hidden" name="BpmCreateErrorIds" value="" style="">
+
+    <input type="hidden" name="wf" value="procFcstVMISearch" style="">
+
+    <input type="hidden" name="AllowableChains" value="" style="">
+
+    <input type="hidden" name="CurrentPageNo" value="" style="">
+
+    <input type="hidden" name="ViewVariants" value="GENERIC_AGG_VIEW|Supply_Plan[Forecast,PrevForecast,InventoryCustSite,SupplyPlanInventory,ProjectedInventoryAdjustment,ExpectedRequirements,ForecastUI,PrevForecastUI,SupplyPlanInventoryUI,InventoryCustSiteUI,ActualInventory,ProjectedInventoryAdjustmentUI,ExpectedRequirementsUI,InProcessRequisitions,UnOrderedRequisitions,UnShippedOrders,SchedUnRefShipments,InTransitShipments,DeliveredShipments,ReceivedShipments,ManualAdjustment,ProjectedInventory,ProjectedDOS,ProjectedMOSMin,ProjectedMOSMax,ActionRequestTickets,DataValidationTickets,SuggestedReplenishment,ProjectedDOSRepl,ForecastS1,ProjectedSuppliesS1,ProjectedInventoryS1,ProjectedDOSS1,SuggestedReplenishmentS1,ProjectedDOSReplS1,ForecastS2,ProjectedSuppliesS2,ProjectedInventoryS2,ProjectedDOSS2,SuggestedReplenishmentS2,ProjectedDOSReplS2,InventoryCustSiteAlert,ForecastAlert]" style="">
+
+    <input type="hidden" name="MESSAGE" value="" style="">
+
+    <input type="hidden" name="FromPage" value="" style="">
+
+    <input type="hidden" name="HasTab" value="1" style="">
+
+    <input type="hidden" name="filter_constraint" value="" style="">
+
+    <input type="hidden" name="RelativeStartDays" value="-6m" style="">
+
+    <input type="hidden" name="ComponentType" value="Mcv" style="">
+
+    <input type="hidden" name="SortDir" value="" style="">
+
+    <input type="hidden" name="StartIndex" value="" style="">
+
+    <input type="hidden" name="OPTIONAL_FILTERS" value="" style="">
+
+    <input type="hidden" name="DM_NAMES" value="" style="">
+
+    <input type="hidden" name="Calendar" value="" style="">
+
+    <input type="hidden" name="START_DATE" value="" style="">
+
+    <input type="hidden" name="EndDate" value="" style="">
+
+    <input type="hidden" name="CTX:applicationId" value="null" style="">
+
+    <input type="hidden" name="useFilter" value="" style="">
+
+    <input type="hidden" name="AllowableTabs" value="detail" style="">
+
+    <input type="hidden" name="ShowDisplayConfigurator" value="true" style="">
+
+    <input type="hidden" name="VARIANT_NAME" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+    <input type="hidden" name="ViewVariant" value="GENERIC_AGG_VIEW|Supply_Plan" style="">
+
+    <input type="hidden" name="PSDSelector" value="procFcstVMICollabSearch,CimPsd" style="">
+
+    <input type="hidden" name="wff" value="target" style="">
+
+    <input type="hidden" name="ShowPageExport" value="false" style="">
+
+    <input type="hidden" name="DrawChart" value="GENERIC_AGG_VIEW,GENERIC_AGG_VIEW|Supply_Plan[Forecast(type=column),PrevForecast(type=column),SupplyPlanInventory(type=column),InventoryCustSite(type=column),ManualAdjustment(type=column),ActualInventory(type=column),ProjectedInventoryAdjustment(type=column),ExpectedRequirements(type=column),InTransitShipments(type=column),UnShippedOrders(type=column),SchedUnRefShipments(type=column),DeliveredShipments(type=column),ReceivedShipments(type=column),ProjectedInventory(type=column),ProjectedDOS(type=column),ProjectedInventoryNegative(type=column),SuggestedReplenishment(type=column),ProjectedDOSRepl(type=column),ForecastS1(type=column),ProjectedSuppliesS1(type=column),ProjectedInventoryS1(type=column),ProjectedDOSS1(type=column),ProjectedInventoryNegativeS1(type=column),SuggestedReplenishmentS1(type=column),ProjectedDOSReplS1(type=column),ForecastS2(type=column),ProjectedSuppliesS2(type=column),ProjectedInventoryS2(type=column),ProjectedDOSS2(type=column),ProjectedInventoryNegativeS2(type=column),SuggestedReplenishmentS2(type=column),ProjectedDOSReplS2(type=column),ForecastUI(type=column),PrevForecastUI(type=column),SupplyPlanInventoryUI(type=column),InventoryCustSiteUI(type=column),ProjectedInventoryAdjustmentUI(type=column),ExpectedRequirementsUI(type=column),DataValidationTickets(type=column),ActionRequestTickets(type=column),InProcessRequisitions(type=column),UnOrderedRequisitions(type=column)]" style="">
+
+    <input type="hidden" name="collabAttrs" value="" style="">
+
+    <input type="hidden" name="severities" value="" style="">
+
+</form>
+
+
+
+<div class="tail-tag" style="position:relative" data-iframe-height=""></div>
+<script>
+  window.iFrameResizer = {
+  
+    hasStickyFooter: false,
+
+    onReady: function () {
+      window.parentIFrame.size();
+      if(!window.jQuery || !window.eto) {
+        console.warn('jQuery and edl are required to enable sticky header/footer');
+        return;
+      }
+      if(true) {
+        window.iFrameResizer.setupStickyFooter();
+      }
+      if(window.iFrameResizer.hasStickyFooter) {
+        rcptop.sendPageInfo({type:"ready"});
+      }
+    },
+
+    onMessage: function (info) {
+      var x = -1, y = -1;
+      if(false) {
+        x = getUserData('Left_null', -1, 'localStorage');
+        info.overrideX  = (x > -1) ? x : -1;
+      } else {
+        info.overrideX = -1;
+      }
+      window.iFrameResizer.adjustHeaderFooter(info);
+      if(window.iFrameResize) {
+        // relay to nested frames
+        var frames = document.querySelectorAll('iframe');
+        for (var i = 0; i < frames.length; i++) {
+          if(frames[i].contentWindow.parentIFrame) {
+            // adjust offsetTop and iframeHeight
+            var iFramePosition = frames[i].getBoundingClientRect(), bodyPosition = document.body.getBoundingClientRect();
+            var offsetTop = parseInt(iFramePosition.top  - bodyPosition.top,  10);
+            var clonedInfo = JSON.parse(JSON.stringify(info));
+            clonedInfo.iframeHeight = iFramePosition.height;
+            clonedInfo.offsetTop = clonedInfo.offsetTop + offsetTop;
+            var message = JSON.stringify(clonedInfo);
+            frames[i].contentWindow.postMessage('[iFrameSizer]message:'+message, window.iFrameResizer.targetOrigin);
+          }
+        }
+      }
+    },
+
+    setupStickyFooter: function () {
+      var footer = window.jQuery('.sticky-footer');
+      var grid = window.jQuery('.eto-grid .eto-grid-scroll:visible');
+      if(footer.length) {
+        // wrap footer inside a div with right style
+        footer.wrap('<div class="sticky-footer-wrapper" '+
+          'style="clear:both;position:relative;width:100%;background-color:white;z-index:10;transition:opacity 0.2s;opacity:1;"></div>');
+        var wrapper = window.jQuery('.sticky-footer-wrapper');
+        if(grid.length) {
+          // setup grid header style
+          var gridHeaders = window.jQuery('.eto-grid thead th');
+          gridHeaders.css({position:'relative', 'z-index':10, transition:'opacity 0.2s', opacity:1});
+
+          // insert scroller before footer
+          wrapper.prepend('<div class="footer-scroller" style="height:18px;overflow-y:hidden;overflow-x:auto;">'+
+            '<div class="footer-scroller-inner" style="height:1px">&nbsp;</div></div>');
+          var scroller = window.jQuery('.sticky-footer-wrapper .footer-scroller');
+
+          // sync grid scroller
+          var syncFunc = function() {
+            var master = window.jQuery(this);
+            var slave = master.hasClass('footer-scroller') ? grid : scroller;
+            slave.off('scroll', null, syncFunc);
+            slave.scrollLeft(master.scrollLeft());
+            //Save to localStorage
+            
+            clearTimeout(window.iFrameResizer.syncTimer);
+            window.iFrameResizer.syncTimer = setTimeout(function() {
+              window.iFrameResizer.syncTimer = null;
+              slave.on('scroll', syncFunc);
+            }, 200);
+          }
+          scroller.on('scroll', syncFunc);
+          grid.on('scroll', syncFunc);
+
+          // attach grid listener
+          var g = new eto.Grid({el: grid.parent()[0]});
+          g.on('columnResize columnAction', window.iFrameResizer.updateScroller);
+        }else {
+          wrapper.prepend('<hr>');
+        }
+        wrapper.after('<div class="sticky-footer-wrapper-tail" style="clear:both;display:block;" />');
+        window.iFrameResizer.hasStickyFooter = true;
+      }
+    },
+    
+    adjustHeaderFooter: function(info) {
+      if(!window.iFrameResizer.hasStickyFooter) {
+        return;
+      }
+      var result = window.iFrameResizer.calculateY(info);
+      // hide header/footer if need to move them
+      if(result.header && result.headerY != 0) {
+        result.header.css({opacity:0});
+      }
+      if(result.footer && result.footerY != 0) {
+        result.footer.css({opacity:0});
+      }
+
+      clearTimeout(window.iFrameResizer.delayTimer);
+      window.iFrameResizer.delayTimer = setTimeout(function() {
+        window.iFrameResizer.delayTimer = null;
+        // move header/footer and show them
+        if(result.header) {
+          result.header.css({opacity:1,transform: 'translateY(' + result.headerY + 'px)', '-webkit-transform': 'translateY(' + result.headerY + 'px)'});
+          //Save to localStorage
+          
+        }
+        if(result.footer) {
+          result.footer.css({opacity:1,transform: 'translateY(' + result.footerY + 'px)', '-webkit-transform': 'translateY(' + result.footerY + 'px)'});
+        }
+        window.iFrameResizer.updateScroller(info);
+      }, 200);
+    },
+
+    calculateY: function (info) {
+      var result = {};
+      var tail = window.jQuery('.sticky-footer-wrapper-tail');
+      var wrapper = window.jQuery('.sticky-footer-wrapper');
+      var gridHeight = Infinity;
+      if(wrapper.length) {
+        var grid = window.jQuery('.eto-grid .eto-grid-scroll:visible');
+        if(grid.length) {
+          var gridBody = grid.find('tbody');
+          gridHeight = Math.max(gridBody.outerHeight(true) - gridBody.find('tr').first().outerHeight(true), 0);
+          var gridHeaders = window.jQuery('.eto-grid thead th');
+          // translate header down when scroll past its top
+          result.header = gridHeaders;
+          result.headerY = Math.min(gridHeight, Math.max(info.headerOffset + info.scrollTop - info.offsetTop - grid.offset().top, 0));
+        }
+
+        // translate footer up
+        result.footer = wrapper;
+        result.footerY = Math.max(-gridHeight, Math.min(info.viewportHeight + info.scrollTop - info.offsetTop - tail.offset().top, 0));
+      }
+      return result;
+    },
+
+    updateScroller: function (info) {
+      var wrapper = window.jQuery('.sticky-footer-wrapper');
+      if(wrapper.length) {
+        var grid = window.jQuery('.eto-grid .eto-grid-scroll:visible');
+        if(grid.length) {
+          var scroller = window.jQuery('.sticky-footer-wrapper .footer-scroller');
+          var scrollerInner = window.jQuery('.sticky-footer-wrapper .footer-scroller .footer-scroller-inner');
+          var gridWidth = grid.outerWidth(true);
+          var gridInnerWidth = window.jQuery('.eto-grid .eto-grid-scroll table').outerWidth(true);
+
+          if(info && info.overrideX && info.overrideX > -1) {
+            grid.scrollLeft(info.overrideX);
+          }
+                    
+          // update scroller width & position
+          scrollerInner.outerWidth(gridInnerWidth);
+          scroller.outerWidth(gridWidth);
+          scroller.scrollLeft(grid.scrollLeft());
+          scroller.offset({left : grid.offset().left});
+
+          // hide or show scroller
+          if('true' === grid.closest('.eto-grid').attr('data-no-scroller') || grid.is(':hidden')) {
+            grid.css({'margin-bottom': '0px'});
+            scroller.hide();
+          } else {
+            // hide native scroller
+            grid.css({'margin-bottom': '-18px'});
+            scroller.show();
+          }
+        }
+      }
+    },
+
+    targetOrigin: window.location.origin ||
+      window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '')
+  };
+
+  window.addEventListener('click', function(event) {
+    if(this != rcptop) {
+      rcptop.jQuery(rcptop.document).find('body').click();
+    }
+  });
+  
+  if(window.name === 'side_frame'|| window.name === 'sticky_frame' || window.top === window.self) {
+    // attach window resize/scroll event when not inside iframe
+    (function(undefined) {
+      var prev = 0;
+      var sendPageInfo = function(event) { var now = Date.now(); if(now - prev > 9) {
+        prev = now;
+        var bodyPosition = document.body.getBoundingClientRect(),
+          info = {
+            iframeHeight: bodyPosition.height,
+            viewportHeight: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+            offsetTop: 0,
+            scrollTop: window.pageYOffset,
+            headerOffset: 0,
+            type: event.type
+          };
+          window.iFrameResizer.onMessage(info);
+        }};
+        window.addEventListener('load', function(event) {
+        window.iFrameResizer.setupStickyFooter();
+        sendPageInfo(event);
+      });
+      window.addEventListener('resize', sendPageInfo);
+      window.addEventListener('scroll', sendPageInfo);
+      window.jQuery(window).on('sendPageInfo', sendPageInfo);
+      window.sendPageInfo = sendPageInfo;
+    })();
+  } else if(window.frameElement && window.frameElement.id === 'popupModal') {
+    // attach window resize/scroll event inside popup modal
+    (function(undefined) {
+      var prev = 0;
+      var modalBody = jQuery(window.frameElement).closest('.eto-modal__body')[0];
+      var sendPageInfo = function(event) { var now = Date.now(); if(now - prev > 9) {
+        prev = now;
+        var bodyPosition = document.body.getBoundingClientRect(), 
+          modalBodyPadding = (modalBody) ? parseFloat(window.top.getComputedStyle(modalBody).paddingTop) : 0,
+          info = {
+            iframeHeight: bodyPosition.height,
+            viewportHeight: modalBody.clientHeight || 0,
+            offsetTop: modalBodyPadding || 0,
+            scrollTop: modalBody.scrollTop,
+            headerOffset: 0,
+            type: event.type
+          };
+        window.iFrameResizer.onMessage(info);
+      }};
+      window.addEventListener('load', function(event) {
+        sendPageInfo(event);
+      });
+      
+      if(modalBody) {
+        modalBody.addEventListener('scroll', sendPageInfo);
+        modalBody.addEventListener('resize', sendPageInfo); 
+      }
+      jQuery(window).resize(sendPageInfo);
+      jQuery(window).scroll(sendPageInfo);
+      window.jQuery(window).on('sendPageInfo', sendPageInfo);
+    })();
+  }  
+
+ 
+  //Force resize of the iframes based on the open menu
+  jQuery('.eto-dropdown').each(function(index, elem) {
+    var dropdown = new eto.Dropdown({el: elem});
+    dropdown.on('opened', function() {
+      //Remove marker from all menus before adding to the one that is open
+      jQuery('.eto-dropdown__menu[data-iframe-height]').removeAttr('data-iframe-height');
+      jQuery(':not(.eto-dropdown) .eto-dropdown__menu[data-affixed]').attr('data-iframe-height','');
+    });
+    dropdown.on('closed', function() {
+      jQuery('.eto-dropdown .eto-dropdown__menu[data-iframe-height]').removeAttr('data-iframe-height');
+    });
+  });
+
+  if (typeof initFormValidation === "function") {
+    // call initFormValidation of Common.jsp to handler button click event when any validation failed
+    initFormValidation();
+  }
+</script>
+<script language="javascript" type="text/javascript" src="./js/bower_components/iframe-resizer/js/iframeResizer.contentWindow.min.js?cacheProperty=gfpvan2536-en"></script>
+
+
+
+<script language="JavaScript" type="text/javascript">
+  var frameUloaded = false;
+  if(isSingle) {
+    frameUloaded = true;
+  }
+  var frameLloaded = false;
+  var stickyFrame = parent.document.getElementById('sticky-frame');
+  var lowerSectionMessage = null;
+  var upperSectionMessage = null;
+  
+  var refreshUpper = false;
+  var refreshLower = false;
+
+  var stickyGrid;
+  var scrollDiv = document.createElement("div");
+  scrollDiv.className = "scrollbar-measure";
+  document.body.appendChild(scrollDiv);
+  // Get the scrollbar width
+  var scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+  // Delete the DIV 
+  document.body.removeChild(scrollDiv);
+  
+  window.addEventListener("message", function(event) {
+    if(event.data.startsWith("[LowerSectionLoaded]")) {
+      var message = JSON.parse(event.data.substring("[LowerSectionLoaded]".length));
+      var frameId = message.frameId;
+      frameLloaded = true;
+      if(refreshUpper) {
+        var upperDoc = findUpperFrameContent();
+        if(upperDoc.refreshSectionOnly) {
+          refreshUpper = false;
+          frameUloaded = false;
+          upperDoc.refreshSectionOnly();
+        }
+      }
+      if(frameUloaded) {
+        hideTopLoader();
+        alignCols();
+        if(!isSingle) {
+          syncScrollbar();
+        }
+        setErrorMessage();
+        setScrollerPosition();
+      }
+    } else if(event.data.startsWith("[UpperSectionLoaded]")) {
+      var message = JSON.parse(event.data.substring("[UpperSectionLoaded]".length));
+      var frameId = message.frameId;
+      frameUloaded = true;
+      var tmpstickyFrame = stickyFrame;
+      if(stickyFrame.contentWindow && stickyFrame.contentWindow.document.getElementById('UpperSection0')) {
+        tmpstickyFrame = stickyFrame.contentWindow.document.getElementById('UpperSection0');
+      }
+      stickyGrid = jQuery(tmpstickyFrame).contents().find('.eto-grid-scroll');
+      if(frameLloaded) {
+        hideTopLoader();
+        alignCols();
+        syncScrollbar();
+        setErrorMessage();
+      }
+    } else if(event.data.startsWith("[UpperSectionResized]")) {
+      var $upperIframe = findUpperFrame();
+      var $lowerIframe = findLowerFrame();
+      alignTotalCol($lowerIframe, $upperIframe);
+    } else if(event.data.startsWith("[LowerSectionScrolled]")) {
+      var message = JSON.parse(event.data.substring("[LowerSectionScrolled]".length));
+      var left = message.left;
+      if(stickyGrid) {
+        stickyGrid.scrollLeft(parseInt(left));
+      }
+    } else if(event.data.startsWith("[UpperSectionCondensed]")) {
+      var message = JSON.parse(event.data.substring("[UpperSectionCondensed]".length));
+      var lowerIframe = findLowerFrameContent();
+      if(lowerIframe && lowerIframe.onClickCondensed) {
+        var e = {target : {checked: message.checked}};
+        lowerIframe.onClickCondensed(e);
+      }
+    } else if(event.data.startsWith("[UpperSectionChanged]")) {
+      var message = JSON.parse(event.data.substring("[UpperSectionChanged]".length));
+      var updateEnabled = message.updateEnabled;
+      var lowerIframe = findLowerFrameContent();
+
+      var lowerBt = lowerIframe.document.getElementById('updateBtn');
+      var lowerResetBt = lowerIframe.document.getElementById('resetBtn');
+      if(updateEnabled ) {
+        if(lowerBt)
+          jQuery(lowerBt).removeAttr("disabled");
+        if(lowerResetBt)
+          jQuery(lowerResetBt).removeAttr("disabled");
+      } else {
+        if(document.getElementById('LowerSectionFrame').contentWindow.processUpdateButtonsForAllLoadedPages) {
+          document.getElementById('LowerSectionFrame').contentWindow.processUpdateButtonsForAllLoadedPages(true);
+        } else {
+          // disable update in lower section when lower section is summary
+          if(lowerBt)
+            jQuery(lowerBt).prop("disabled",true);
+          if(lowerResetBt)
+            jQuery(lowerResetBt).prop("disabled",true);
+        }
+      }
+    } else if(event.data.startsWith("[LowerSectionChanged]")) {
+      var message = JSON.parse(event.data.substring("[LowerSectionChanged]".length));
+      var updateEnabled = message.updateEnabled;
+      
+      var lowerIframe = findLowerFrameContent();
+
+      var lowerBt = lowerIframe.document.getElementById('updateBtn');
+      var lowerResetBt = lowerIframe.document.getElementById('resetBtn');
+      
+      var upperFrame = parent.document.getElementById('sticky-frame').contentDocument.getElementById('UpperSection0');
+      if(upperFrame) {
+        upperFrame = upperFrame.contentDocument;
+        var upperUpdateBt = upperFrame.getElementById('updateBtn');
+        //check any selected in upper section
+        if(updateEnabled ) {
+          if(lowerBt)
+            jQuery(lowerBt).removeAttr("disabled");
+          if(lowerResetBt)
+            jQuery(lowerResetBt).removeAttr("disabled");
+        } else {
+          if(!jQuery(upperUpdateBt).attr('disabled')) {
+            if(lowerBt)
+              jQuery(lowerBt).removeAttr("disabled");
+            if(lowerResetBt)
+              jQuery(lowerResetBt).removeAttr("disabled");
+          }
+        }
+      }      
+    } else if(event.data.startsWith("[LowerSectionReset]")) {
+      //reset upper section
+      if(!isSingle) {
+        frameUloaded = false;
+      }
+      frameLloaded = false;
+      
+      var upperFrame = parent.document.getElementById('sticky-frame').contentWindow;
+      if(upperFrame.refresh) {
+        upperFrame.refresh(true, 0 , true)
+      }
+      setScrollerPosition();
+    } else if(event.data.startsWith("[LowerSectionUpdating]")) {
+      var message = event.data.substring("[LowerSectionUpdating]".length);
+      var upperFrame = parent.document.getElementById('sticky-frame').contentDocument.getElementById('UpperSection0');
+      frameLloaded = false;
+      if(upperFrame) {
+        if(upperFrame.contentWindow.updatePits) {
+          if(message && message == 'summary') {
+            refreshLower = true; //lower section is summary need refresh after upper section loaded
+          }
+          frameUloaded = false;
+          upperFrame.contentWindow.updatePits('updatePits');
+        }
+      } else {
+        //upper is summary need refresh after
+        refreshUpper = true;
+        updateLowerSectionPit();
+      }
+      setScrollerPosition();
+    } else if(event.data.startsWith("[UpperSectionUpdated]")) {
+      var tmpstickyFrame = stickyFrame;
+      if(stickyFrame.contentWindow && stickyFrame.contentWindow.document.getElementById('UpperSection0')) {
+        tmpstickyFrame = stickyFrame.contentWindow.document.getElementById('UpperSection0');
+      }
+      stickyGrid = jQuery(tmpstickyFrame).contents().find('.eto-grid-scroll');
+      frameUloaded = true;
+      
+      if(refreshLower) {
+        var lowerDoc = findLowerFrameContent();
+        if(lowerDoc.refreshSectionOnly) {
+          refreshLower = false;
+          frameLloaded = false;
+          lowerDoc.refreshSectionOnly();
+        }
+      } else {
+         updateLowerSectionPit();
+      }
+    } else if(event.data.startsWith("[UpperSectionFitData]")) {
+      alignCols();
+      reCalculateDescriptionRow();
+    } else if(event.data.startsWith("[LowerSectionColumnResized]")) {
+      var message = JSON.parse(event.data.substring("[LowerSectionColumnResized]".length));
+      resizeColumnInTable(findUpperFrame(), message);
+    } else if(event.data.startsWith("[UpperSectionColumnResized]")) {
+      var message = JSON.parse(event.data.substring("[UpperSectionColumnResized]".length));
+      var $lowerIframe = findLowerFrame();
+      resizeColumnInTable($lowerIframe, message);
+      var lowerIframe = findLowerFrameContent();
+      if(lowerIframe && lowerIframe.iFrameResizer) {
+        var info = {type:"ready"}, x = getUserData('Left_procFcstVMISearch_titusolang_Standard Viewer: PSI-MPA-SC', -1, 'localStorage');
+        if(x > -1)
+          info.overrideX = x;
+        else
+          info.overrideX = -1;
+        lowerIframe.iFrameResizer.updateScroller(info);
+      }
+    } else if(event.data.startsWith("[ExecuteLowerIO]")) {
+      var message = JSON.parse(event.data.substring("[ExecuteLowerIO]".length));
+      var buttonIndex = message.buttonIndex;
+      var $lowerIframe = findLowerFrame();
+      var lowerIoBt = $lowerIframe.find('#fileDownloadMenu ul li a:eq('+buttonIndex+')');
+      if(lowerIoBt.length > 0) {
+        lowerIoBt[0].click();
+      }
+    } else if(event.data.startsWith("[LowerSectionShowErrorMessage]")) {
+      var message = JSON.parse(event.data.substring("[LowerSectionShowErrorMessage]".length));
+      var type = message.type;
+      var lowerMsg = message.message;
+      lowerSectionMessage = {type: type, message: lowerMsg};
+      if(frameUloaded) {
+        setErrorMessage();
+      }
+    } else if(event.data.startsWith("[UpperSectionShowErrorMessage]")) {
+      var message = JSON.parse(event.data.substring("[UpperSectionShowErrorMessage]".length));
+      var type = message.type;
+      var upperMsg = message.message;
+      upperSectionMessage = {type: type, message: upperMsg};
+      if(frameLloaded) {
+        setErrorMessage();
+      }
+    }
+  });
+  
+  function findUpperFrame(){
+    var $upperIframe = jQuery(parent.document.getElementById('sticky-frame')).contents();
+    if($upperIframe.find('#UpperSection0').length > 0) {
+      $upperIframe = $upperIframe.find('#UpperSection0').contents();
+    }
+    return $upperIframe;
+  }
+  
+  //set lower section message to upper section
+  function setErrorMessage() {
+    if(upperSectionMessage != null || lowerSectionMessage != null) {
+      var upperSectionFrame = findUpperFrameContent();
+      if(isSingle) {
+        upperSectionFrame = findLowerFrameContent();
+      }
+      if(upperSectionFrame &&  upperSectionFrame.showMessage) {
+        var type = upperSectionMessage != null? upperSectionMessage.type : 'success';
+        if(type == 'success' && lowerSectionMessage != null && lowerSectionMessage.type != 'success') {
+          type = lowerSectionMessage.type;
+        }
+          
+        var message = upperSectionMessage != null ? ('Upper Section' + '<br>'+ upperSectionMessage.message ): '';
+        if(lowerSectionMessage != null) {
+          if(message.length > 0 ){
+            message += '<br>';
+          }
+          if(!isSingle) {
+            message += 'Lower Section' + '<br>';
+          }
+          message += lowerSectionMessage.message;
+        }
+        if(type =='success') {
+          upperSectionFrame.clearMessage();
+          setTopToast(message, 'success');
+        } else {
+          upperSectionFrame.showMessage(type, message);
+        }
+      }
+      upperSectionMessage = null;
+      lowerSectionMessage = null;
+    }
+  }
+  function findUpperFrameContent(){
+    var $upperIframe = jQuery(parent.document.getElementById('sticky-frame'));
+    if($upperIframe.contents().find('#UpperSection0').length > 0) {
+      $upperIframe = $upperIframe.contents().find('#UpperSection0');
+    }
+    return $upperIframe[0].contentWindow;
+  }
+  
+  function findLowerFrameContent() {
+    var lowerIframe = jQuery(document.getElementById('LowerSectionFrame')).contents();
+    var lowerPageNo = lowerIframe.find('input[name="PageNo"]').val();
+
+    if(lowerPageNo) {
+      lowerIframe = lowerIframe.find('#LowerSection' + lowerPageNo)[0].contentWindow;
+    } else {
+      lowerIframe = document.getElementById('LowerSectionFrame').contentWindow;
+    }
+    return lowerIframe;
+  }
+  
+  function findLowerFrame() {
+     var $lowerIframe = jQuery(document.getElementById('LowerSectionFrame')).contents();
+     var lowerPageNo = $lowerIframe.find('input[name="PageNo"]').val();
+     if(lowerPageNo) {
+       $lowerIframe = $lowerIframe.find('#LowerSection' + lowerPageNo).contents();
+     }
+     return $lowerIframe;
+  }
+  
+  function resizeColumnInTable($iframe, message) {
+    if(!message || !$iframe) {
+      return
+    }
+    var columnId = message.columnId;
+    var width = message.width;    
+    var columnIndx, $table;
+    
+    if(columnId.startsWith('data_')) {
+      //data column
+      $table = $iframe.find('.eto-grid-scroll table');
+      columnIndx = parseFloat(columnId.substring('data_'.length), 10);
+    } else {
+      //frozen table
+      $table = $iframe.find('.eto-grid-frozen:first table');
+      columnIndx = $table.find('thead th[data-column="'+columnId+'"]');
+      if(columnIndx && columnIndx.length > 0) {
+        columnIndx = columnIndx[0].cellIndex;
+      } else {
+        columnIndx = $table.find('thead th').length -1;
+      }
+    }
+    resizeColumn($table, columnIndx, width);
+    reCalculateDescriptionRow();
+  }
+  
+  function resizeColumn($table, columnIndx, width) {
+    var col = $table.find('colgroup col:eq('+columnIndx+')');
+    if(col && col.length > 0) {
+      var orignWidth = parseFloat(col.css('width'), 10);
+      var tableWidth = parseFloat($table.css('width'), 10);
+      var delta = width - orignWidth;
+      col.css('width', width);
+      $table.css('width', tableWidth + delta);
+    }
+  }
+  
+  function updateLowerSectionPit() {
+    var lowerIframe = findLowerFrameContent();
+    if(lowerIframe && lowerIframe.updatePits) {
+      lowerIframe.updatePits('updatePits');
+    }
+  }
+  function syncScrollbar() {
+    var $lowerIframe = findLowerFrame();
+    var lowerGrid = $lowerIframe.find('.eto-grid-scroll');
+    if(lowerGrid && stickyGrid) {
+      stickyGrid.scrollLeft(lowerGrid.scrollLeft());
+    }
+    var $upperIframe = findUpperFrame();
+    //sync mcv scrollar header title
+    var $upperTitle = $upperIframe.find('th.mcv-bucket-group .eto-grid-column__label:first');
+    if($upperTitle.length > 0) {
+      var scrollLeft = $upperIframe.find('.eto-grid-scroll').scrollLeft();
+      $upperTitle.css('left', scrollLeft);
+    }
+    
+    var $lowerTitle = $lowerIframe.find('th.mcv-bucket-group .eto-grid-column__label:first');
+    if($lowerTitle.length > 0) {
+      var scrollLeft = $lowerIframe.find('.eto-grid-scroll').scrollLeft();
+      $lowerTitle.css('left', scrollLeft);
+    }
+  }
+  
+  function addLowerIoButtonsToUpper($lowerIframe, $upperIframe){
+    //remove
+    $upperIframe.find('#fileDownloadMenu ul li[name="lowerIoBt"]').remove();
+    //add
+    var lowerBulkIoBts = $lowerIframe.find('#fileDownloadMenu li a'); 
+    if(lowerBulkIoBts.length > 1) {
+      $upperIframe.find('#fileDownloadMenu ul').append('<li name="lowerIoBt" role="separator" class="eto-dropdown__menu__divider"></li>');
+      $upperIframe.find('#fileDownloadMenu ul').append('<li name="lowerIoBt" role="separator" class="eto-dropdown__menu-item"><b>'+'Lower Section'+'</b></li>');
+
+      lowerBulkIoBts.each(function(index) {
+        if(jQuery(this).parent().attr('id') != 'export') {
+          var iobt = jQuery(this).html();
+          $upperIframe.find('#fileDownloadMenu ul').append('<li name="lowerIoBt" role="menuitem"><a onclick="javascript: void executeLowerIo('+ index +')" >' + iobt + "</a></li>");
+        }
+      });
+    }
+  }
+  
+  function alignCols() {
+    var $lowerIframe = findLowerFrame();
+    if(!isSingle) {
+      var $upperIframe = findUpperFrame();
+      alignFrozenCols($lowerIframe, $upperIframe);
+      alignDataCols($lowerIframe, $upperIframe);
+      window.setTimeout(function() {
+        //need some time for iframe resizer
+        alignTotalCol($lowerIframe, $upperIframe);
+      }, 200);
+      addLowerIoButtonsToUpper($lowerIframe, $upperIframe);
+    } else {
+      if($lowerIframe.find('#mcvsynctables').is(":visible")) { 
+        //when chat shows first, should not run fit data. Because mcv is hidden and it cannot get the data column width.
+        alignDataCols($lowerIframe, $upperIframe); 
+      }
+    }
+  }
+  
+  function reCalculateDescriptionRow() {
+    //recalucate the legnth of mcv descript rows
+    var upperSectionFrame = findUpperFrameContent();
+    if(upperSectionFrame.onResize) {
+      upperSectionFrame.onResize();
+    }
+    var lowerSectionFrame = findLowerFrameContent();
+    if(lowerSectionFrame.onResize) {
+      lowerSectionFrame.onResize();
+    }
+  }
+  
+  function alignTotalCol($lowerIframe, $upperIframe) {
+    var $lowerTable = $lowerIframe.find('.eto-grid-frozen--right table');
+    var $upperTable = $upperIframe.find('.eto-grid-frozen--right table');
+    if(!$lowerTable.attr('orginalWidth')) {
+      $lowerTable.attr('orginalWidth', $lowerTable.width());
+    }
+    var tmpstickyFrame = stickyFrame;
+    if(stickyFrame.contentWindow && stickyFrame.contentWindow.document.getElementById('UpperSection0')) {
+      tmpstickyFrame = stickyFrame.contentWindow.document.getElementById('UpperSection0');
+    }
+    
+    //need check grid is full width
+    var $body = jQuery(tmpstickyFrame).contents().find('body');
+    var gridFullWidth =  $body.find('.eto-grid')[0].clientWidth;
+    var frozenWidth =  $body.find('.eto-grid-frozen:first')[0].clientWidth;
+    var dataWidth =  $body.find('.eto-grid-scroll')[0].clientWidth;
+    var totalWidth = jQuery(tmpstickyFrame).contents().find('body .eto-grid-frozen:last')[0].clientWidth;
+    var addWidth = 0;
+    if(totalWidth + dataWidth + frozenWidth + 8 >= gridFullWidth) {
+      addWidth = jQuery(tmpstickyFrame).contents().find('body')[0].clientHeight - stickyFrame.clientHeight > 0? scrollbarWidth: 0;
+    }
+    
+    //if there is no scroll bar, need change the lower total column to orginal width
+    if(addWidth == 0) {
+      resizeAllColumnWidth($lowerTable, [{'width': $lowerTable.attr('orginalWidth')}]);
+    }
+    alignUpperandlowerCols ($lowerTable, $upperTable, addWidth);
+  }
+  function alignFrozenCols($lowerIframe, $upperIframe) {
+    var $lowerTable = $lowerIframe.find('.eto-grid-frozen:first table');
+    var $upperTable = $upperIframe.find('.eto-grid-frozen:first table');
+    
+    alignUpperandlowerCols ($lowerTable, $upperTable, 0);
+  }
+  
+  function alignDataCols($lowerIframe, $upperIframe) {
+    var $lowerTable, $upperTable;
+    
+    $lowerTable = $lowerIframe.find('.eto-grid-scroll table');
+    adjustTableWidth($lowerTable);
+
+    if(!isSingle) {
+      $upperTable = $upperIframe.find('.eto-grid-scroll table');
+      adjustTableWidth($upperTable);
+      
+      alignUpperandlowerDataCols ($lowerTable, $upperTable, 0);
+    } else {
+      $lowerTable = $lowerIframe.find('.eto-grid-frozen--right table');
+      adjustTableWidth($lowerTable);
+    }
+  }
+  
+  function alignUpperandlowerDataCols ($lowerTable, $upperTable){
+    if($lowerTable.length == 0 || $upperTable.length == 0) {
+      return;
+    }
+    if($lowerTable.css('width') == $upperTable.css('width') + scrollbarWidth) {
+      return;
+    }
+    var upperFrozenCols = getDataColumnWidth($upperTable);
+    var lowerFrozenCols = getDataColumnWidth($lowerTable);
+    if(upperFrozenCols.length != lowerFrozenCols.length) {
+      return;
+    }
+    
+    var colsWidth = [];
+    jQuery(upperFrozenCols).each(function(index) {
+      if(this['width'] > lowerFrozenCols[index]['width']) {
+        colsWidth.push({'width': this['width']});
+      } else {
+      colsWidth.push({'width': lowerFrozenCols[index]['width']});
+      }
+    });
+    resizeAllColumnWidth($lowerTable, colsWidth);
+    resizeAllColumnWidth($upperTable, colsWidth);
+
+  }
+  
+  function alignUpperandlowerCols ($lowerTable, $upperTable, scrollbarWidth){
+    if($lowerTable.length == 0 || $upperTable.length == 0) {
+      return;
+    }
+    if($lowerTable.css('width') == $upperTable.css('width') + scrollbarWidth) {
+      return;
+    }
+      
+    var upperFrozenCols = getAllColumnWidth($upperTable);
+    var lowerFrozenCols = getAllColumnWidth($lowerTable);
+    
+    var upperFrozenColWidth = upperFrozenCols[upperFrozenCols.length -1];
+    upperFrozenCols.length = upperFrozenCols.length - 1;
+    if(scrollbarWidth) {
+      upperFrozenColWidth += scrollbarWidth;
+    }
+    var lowerFrozenColWidth = lowerFrozenCols[lowerFrozenCols.length -1];
+    lowerFrozenColWidth.length = lowerFrozenColWidth.length - 1;
+    
+    var adjustTable, adjustCols, delta;
+    if(upperFrozenColWidth > lowerFrozenColWidth) {
+      adjustTable = $lowerTable;
+      adjustCols = lowerFrozenCols;
+      delta = upperFrozenColWidth - lowerFrozenColWidth;
+    } else {
+      adjustTable = $upperTable;
+      adjustCols = upperFrozenCols;
+      delta = lowerFrozenColWidth - upperFrozenColWidth;
+    }
+    
+    var wideCols = upperFrozenColWidth > lowerFrozenColWidth? upperFrozenCols : lowerFrozenCols;
+    var narrowCols = upperFrozenColWidth > lowerFrozenColWidth? lowerFrozenCols : upperFrozenCols;
+    
+    var detailsIndex = 0;
+    var detailNum = parseInt(adjustTable.find('th[data-column="details"]').attr('detailnum'));
+    if(detailNum == NaN) {
+      detailNum = 0;
+    }
+    
+    var tagertName = detailNum > 3 ? 'details' : 'dataMeasures';
+    jQuery(narrowCols).each(function(index) {
+      if(this['name'] == tagertName) {
+        detailsIndex = index;
+      }
+    });
+    
+    //do not change the width of wideCols, adjust the width of narrowCols
+    var firstNarrowColWidth = narrowCols[0]['width'];
+    var firstWideColWidth = wideCols[0]['width'];
+    delta = delta - ( firstWideColWidth - firstNarrowColWidth);
+    narrowCols[0]['width'] = firstWideColWidth;
+    //extend the detail/dm column
+    narrowCols[detailsIndex]['width'] = narrowCols[detailsIndex]['width'] + delta;
+
+    resizeAllColumnWidth(adjustTable, narrowCols);
+  }
+  
+  function getAllColumnWidth($table) {
+    var cols = [];
+    if($table) {
+      $table.find('thead th').each(function() {
+        var columnName = jQuery(this).attr('data-column');
+        if(columnName) {
+          cols.push({'name': columnName});
+        }
+      });
+      var total = 0;
+      $table.find('colgroup col').each(function(index) {
+        var width = jQuery(this).css('width');
+        if(width) {
+          var widthNum = parseFloat(width, 10);
+          total += widthNum;
+          cols[index]['width'] = widthNum;
+        }
+      });
+      cols[cols.length] = total;
+      return cols;
+    }
+  }
+  
+  function setScrollerPosition() {
+    var lowerIframe = findLowerFrameContent();
+    if(lowerIframe && lowerIframe.iFrameResizer) {
+      var info = {type:"ready"}, x = getUserData('Left_procFcstVMISearch_titusolang_Standard Viewer: PSI-MPA-SC', -1, 'localStorage'), y = getUserData('Top_procFcstVMISearch_titusolang_Standard Viewer: PSI-MPA-SC', -1, 'localStorage');
+      
+      x = isNaN(Number(x)) ? x: Number(x);
+      y = isNaN(Number(y)) ? y: Number(y);
+      info.overrideX = (x > -1) ? x : -1;
+      lowerIframe.iFrameResizer.updateScroller(info);
+      if(y > -1) {
+        setTimeout(rcptop.scrollTo(0, y), 500);
+      }
+    }
+
+  }
+</script>
+
+
+
+<div style="clear: both; display: block; height: 0px;"></div></body></html>

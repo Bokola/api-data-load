@@ -1,5 +1,5 @@
 [project]
-name = "api_data_load"
+name = "van"
 version = "0.1.0"
 description = "Data Scraping VAN supply site for Family planning supply Data"
 readme = "README.md"
