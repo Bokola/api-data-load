@@ -45,20 +45,20 @@ shell/CI-exported env vars always take priority over `.env` if both are set.
 
 ```bash
 # Full pipeline - .env is picked up automatically
-uv run python -m gfpvan_pipeline.main
+uv run python -m van.main
 
 # Cap how many result pages to process per country (useful while testing selectors)
-uv run python -m gfpvan_pipeline.main --max-pages 1
+uv run python -m van.main --max-pages 1
 
 # full run
 
-uv run python -m gfpvan_pipeline.main
+uv run python -m van.main
 
 # Reconcile against a manually-downloaded baseline file
-uv run python -m gfpvan_pipeline.main --baseline path/to/manual_download.xlsx
+uv run python -m van.main --baseline path/to/manual_download.xlsx
 
 # Equivalent, via the installed console script
-uv run gfpvan-pipeline --max-pages 1
+uv run van --max-pages 1
 ```
 
 Watch it run instead of headless: set `headless: false` in `config.yaml`.
